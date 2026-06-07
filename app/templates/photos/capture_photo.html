@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Capture Photo{% endblock %}
+{% block page_title %}Identity Photo Capture{% endblock %}
+
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+<div class="page-header pop-in">
+  <div class="page-header-left">
+    <h1>Identity Photo Capture</h1>
+    <p>Agreement: <span class="font-mono" style="font-size:12px">{{ agreement.agreement_uid[:18] }}...</span></p>
+  </div>
+  <a href="{{ url_for('agreement.view_agreement', agreement_id=agreement.id) }}" class="btn btn-outline">← Back to Agreement</a>
+</div>
+
+<div style="max-width:560px;margin:0 auto">
+
+  <!-- PRIVACY NOTICE -->
+  <div class="warning-box pop-in pop-in-delay-1" style="margin-bottom:24px">
+    <strong>Privacy Notice:</strong> This photo is captured only for agreement verification evidence in this academic prototype. No facial recognition or biometric template is created. Your photo is stored securely and linked only to this agreement.
+  </div>
+
+  <div class="card pop-in pop-in-delay-2">
+    <div class="card-body">
+
+      {% if existing_photo %}
+      <div class="success-box" style="margin-bottom:20px">
+        ✓ You already have a photo on file for this agreement ({{ existing_photo.captured_at.strftime('%d %b %Y %H:%M') }}). You can recapture if needed.
+      </div>
+      {% endif %}
+
+      <!-- WEBCAM -->
+      <div class="webcam-container" style="margin-bottom:20px">
+        <video id="webcamVideo" autoplay playsinline style="display:none;width:100%;height:100%;object-fit:cover"></video>
+        <canvas id="webcamCanvas" style="display:none"></canvas>
+        <img id="photoPreview" style="display:none;width:100%;border-radius:var(--radius)" alt="Captured photo">
+        <div id="webcamPlaceholder" style="display:flex;align-items:center;justify-content:center;height:100%;min-height:240px;flex-direction:column;gap:12px;color:var(--grey-500)">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+          <span>Camera preview will appear here</span>
+        </div>
+      </div>
+
+      <!-- CONSENT -->
+      <div class="checkbox-group" style="margin-bottom:20px;padding:14px;background:var(--grey-100);border-radius:var(--radius-sm)">
+        <input type="checkbox" id="consentCheck">
+        <label for="consentCheck">
+          I give my <strong>consent</strong> for this photo to be captured and stored as identity verification evidence for this rental agreement. I understand this is for academic prototype purposes only.
+        </label>
+      </div>
+
+      <!-- CONTROLS -->
+      <div class="webcam-controls">
+        <button id="startCamBtn" class="btn btn-primary" onclick="startWebcam()">
+          📷 Start Camera
+        </button>
+        <button id="captureBtn" class="btn btn-success" onclick="capturePhoto()" style="display:none">
+          ⚡ Capture Photo
+        </button>
+        <button id="retakeBtn" class="btn btn-outline" onclick="retakePhoto()" style="display:none">
+          🔄 Retake
+        </button>
+        <button id="submitPhotoBtn" class="btn btn-primary" onclick="submitPhoto({{ agreement.id }})" style="display:none">
+          ✓ Submit Photo
+        </button>
+      </div>
+
+      <div id="photoStatus" style="margin-top:16px"></div>
+
+      <div class="divider"></div>
+      <a href="{{ url_for('agreement.view_agreement', agreement_id=agreement.id) }}" class="btn btn-ghost">
+        ← Return to Agreement
+      </a>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// Override placeholder hiding when camera starts
+const origStart = startWebcam;
+startWebcam = async function() {
+  document.getElementById('webcamPlaceholder').style.display = 'none';
+  await origStart();
+};
+</script>
+{% endblock %}

@@ -1,0 +1,728 @@
+{% extends "base.html" %}
+{% block title %}Cryptography{% endblock %}
+{% block page_title %}Cryptography & Security Algorithms{% endblock %}
+
+{% block head %}
+<style>
+.crypto-hero {
+  background: var(--black);
+  color: var(--white);
+  border-radius: 12px;
+  padding: 2.5rem;
+  margin-bottom: 2rem;
+  position: relative;
+  overflow: hidden;
+}
+.crypto-hero::before {
+  content:'';position:absolute;top:-60px;right:-60px;
+  width:200px;height:200px;border:2px solid rgba(255,255,255,0.05);border-radius:50%;
+}
+.crypto-hero h1 { font-size:2rem;font-weight:800;margin:0 0 0.4rem; }
+.crypto-hero p  { color:rgba(255,255,255,0.6);margin:0;font-size:0.9rem; }
+
+/* stat strip */
+.stat-strip {
+  display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:2rem;
+}
+.stat-pill {
+  background:var(--white);border:1px solid var(--gray-200);border-radius:8px;
+  padding:0.75rem 1.25rem;text-align:center;flex:1;min-width:110px;
+}
+.stat-pill .n { font-size:1.6rem;font-weight:900;color:var(--black);line-height:1; }
+.stat-pill .l { font-size:0.7rem;color:var(--gray-500);text-transform:uppercase;letter-spacing:.07em;font-weight:600;margin-top:2px; }
+
+/* algo cards */
+.algo-grid {
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:1.25rem;margin-bottom:2rem;
+}
+.algo-card {
+  background:var(--white);border:1px solid var(--gray-200);border-radius:12px;
+  overflow:hidden;transition:box-shadow .2s,transform .2s;
+}
+.algo-card:hover { box-shadow:0 8px 24px rgba(0,0,0,.08);transform:translateY(-2px); }
+
+.algo-head {
+  background:var(--black);color:var(--white);
+  padding:1.1rem 1.25rem;
+  display:flex;align-items:center;gap:0.75rem;
+}
+.algo-head svg { stroke:var(--white);flex-shrink:0; }
+.algo-head-text .name { font-size:1rem;font-weight:700; }
+.algo-head-text .type { font-size:0.7rem;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:.06em;font-weight:600; }
+
+.algo-body { padding:1.25rem; }
+.algo-desc { font-size:0.85rem;color:var(--gray-600);line-height:1.65;margin-bottom:1rem; }
+
+/* usage locations */
+.usage-label {
+  font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;
+  color:var(--gray-400);margin-bottom:0.5rem;
+}
+.location-item {
+  border:1px solid var(--gray-200);border-radius:8px;overflow:hidden;margin-bottom:0.6rem;
+}
+.loc-header {
+  background:var(--gray-50);border-bottom:1px solid var(--gray-200);
+  padding:0.4rem 0.75rem;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:0.5rem;
+}
+.loc-file {
+  font-family:'Courier New',monospace;font-size:0.75rem;font-weight:700;color:var(--black);
+}
+.loc-line {
+  font-size:0.7rem;background:var(--black);color:var(--white);
+  padding:0.15rem 0.5rem;border-radius:20px;font-weight:700;white-space:nowrap;
+}
+.loc-code {
+  background:#0d1117;color:#e6edf3;
+  font-family:'Courier New',monospace;font-size:0.76rem;line-height:1.7;
+  padding:0.75rem 1rem;overflow-x:auto;margin:0;
+}
+.loc-code .kw  { color:#ff7b72; }
+.loc-code .fn  { color:#d2a8ff; }
+.loc-code .str { color:#a5d6ff; }
+.loc-code .num { color:#79c0ff; }
+.loc-code .cm  { color:#8b949e; }
+.loc-code .cls { color:#ffa657; }
+
+/* full-reference table */
+.ref-section {
+  background:var(--white);border:1px solid var(--gray-200);border-radius:12px;
+  padding:1.75rem;margin-bottom:2rem;
+}
+.ref-section h2 {
+  font-size:1rem;font-weight:700;margin:0 0 1.25rem;
+  display:flex;align-items:center;gap:0.5rem;
+}
+.ref-table { width:100%;border-collapse:collapse;font-size:0.82rem; }
+.ref-table th {
+  text-align:left;padding:0.5rem 0.75rem;font-weight:700;
+  border-bottom:2px solid var(--black);background:var(--gray-50);
+}
+.ref-table td { padding:0.5rem 0.75rem;border-bottom:1px solid var(--gray-100);vertical-align:top; }
+.ref-table tr:last-child td { border-bottom:none; }
+.ref-table td:nth-child(1) { font-weight:600;color:var(--black);white-space:nowrap; }
+.ref-table td:nth-child(2) { font-family:'Courier New',monospace;color:var(--gray-700);font-size:0.78rem; }
+.ref-table td:nth-child(3) {
+  font-family:'Courier New',monospace;font-size:0.72rem;
+  background:#0d1117;color:#79c0ff;border-radius:4px;
+  padding:0.35rem 0.6rem;white-space:nowrap;
+}
+.ref-table td:nth-child(4) { color:var(--gray-500);font-size:0.8rem; }
+
+.algo-tag {
+  display:inline-block;font-size:0.68rem;font-weight:700;padding:.2rem .5rem;
+  border-radius:4px;margin-right:.3rem;
+}
+.tag-rsa   { background:#000;color:#fff; }
+.tag-aes   { background:#1a1a2e;color:#a5d6ff; }
+.tag-sha   { background:#2d2d2d;color:#ffa657; }
+.tag-x509  { background:#1a2d1a;color:#56d364; }
+
+.note-box {
+  background:var(--gray-50);border:1px solid var(--gray-200);border-radius:10px;
+  padding:1rem 1.25rem;font-size:0.82rem;color:var(--gray-600);line-height:1.7;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-wrapper" style="max-width:1100px">
+
+  <div class="crypto-hero">
+    <h1>Where Each Algorithm Is Used</h1>
+    <p>Every encryption, signature, and hash call — with the exact file path and line number in the source code.</p>
+  </div>
+
+  <div class="stat-strip">
+    <div class="stat-pill"><div class="n">20</div><div class="l">Crypto calls</div></div>
+    <div class="stat-pill"><div class="n">5</div><div class="l">Source files</div></div>
+    <div class="stat-pill"><div class="n">2048</div><div class="l">RSA bits</div></div>
+    <div class="stat-pill"><div class="n">256</div><div class="l">AES bits</div></div>
+    <div class="stat-pill"><div class="n">256</div><div class="l">SHA bits</div></div>
+    <div class="stat-pill"><div class="n">X.509</div><div class="l">Cert standard</div></div>
+  </div>
+
+  <!-- ── ALGORITHM CARDS ──────────────────────────────────────── -->
+  <div class="algo-grid">
+
+    <!-- RSA-2048 Key Generation -->
+    <div class="algo-card">
+      <div class="algo-head">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <div class="algo-head-text">
+          <div class="name">RSA-2048 Key Generation</div>
+          <div class="type">Asymmetric · On every registration</div>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p class="algo-desc">
+          When a user registers, <code>generate_rsa_keypair()</code> is called to produce a 2048-bit RSA key pair.
+          The same call is used internally to create the Demo CA's key at app startup.
+          Public exponent 65537 is the standard choice — it is prime and makes encryption fast.
+        </p>
+        <div class="usage-label">Used in code</div>
+
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/crypto_service.py</span>
+            <span class="loc-line">line 12–16</span>
+          </div>
+          <pre class="loc-code"><span class="cm"># Called once per user on registration</span>
+<span class="kw">def</span> <span class="fn">generate_rsa_keypair</span>():
+    private_key = rsa.<span class="fn">generate_private_key</span>(
+        public_exponent=<span class="num">65537</span>,
+        key_size=<span class="num">2048</span>,
+        backend=<span class="fn">default_backend</span>()
+    )</pre>
+        </div>
+
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/certificate_service.py</span>
+            <span class="loc-line">line 20–22</span>
+          </div>
+          <pre class="loc-code"><span class="cm"># Demo CA key — generated once at app startup</span>
+ca_key = rsa.<span class="fn">generate_private_key</span>(
+    public_exponent=<span class="num">65537</span>, key_size=<span class="num">2048</span>, backend=<span class="fn">default_backend</span>()
+)</pre>
+        </div>
+
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/routes/auth_routes.py</span>
+            <span class="loc-line">Called on /register POST</span>
+          </div>
+          <pre class="loc-code"><span class="cm"># On registration: generate keys + issue cert</span>
+priv, pub = <span class="fn">generate_rsa_keypair</span>()
+cert_data = <span class="fn">issue_certificate</span>(pub, form.full_name.data, form.email.data)
+user.private_key_pem = priv
+user.public_key_pem  = pub</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- RSA-PSS Signature -->
+    <div class="algo-card">
+      <div class="algo-head">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <div class="algo-head-text">
+          <div class="name">RSA-PSS + SHA-256 Signature</div>
+          <div class="type">Asymmetric · Agreement signing step</div>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p class="algo-desc">
+          Both landlord and tenant digitally sign the SHA-256 hash of the agreement document.
+          PSS (Probabilistic Signature Scheme) uses a random salt so the same document signed twice gives different bytes — preventing replay attacks.
+          The signature is stored in the DB and re-verified on every QR scan.
+        </p>
+        <div class="usage-label">Sign — used in code</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/crypto_service.py</span>
+            <span class="loc-line">line 96–104</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">rsa_sign</span>(private_key_pem, data_hex):
+    private_key = <span class="fn">load_private_key</span>(private_key_pem)
+    data_bytes = <span class="fn">bytes.fromhex</span>(data_hex)
+    signature = private_key.<span class="fn">sign</span>(
+        data_bytes,
+        padding.<span class="fn">PSS</span>(
+            mgf=padding.<span class="fn">MGF1</span>(hashes.<span class="fn">SHA256</span>()),
+            salt_length=padding.PSS.<span class="num">MAX_LENGTH</span>
+        ),
+        hashes.<span class="fn">SHA256</span>()
+    )
+    <span class="kw">return</span> base64.<span class="fn">b64encode</span>(signature).<span class="fn">decode</span>(<span class="str">'utf-8'</span>)</pre>
+        </div>
+
+        <div class="usage-label">Verify — used in code</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/crypto_service.py</span>
+            <span class="loc-line">line 114–123</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">rsa_verify</span>(public_key_pem, data_hex, signature_b64):
+    <span class="kw">try</span>:
+        public_key = <span class="fn">load_public_key</span>(public_key_pem)
+        public_key.<span class="fn">verify</span>(
+            signature,
+            data_bytes,
+            padding.<span class="fn">PSS</span>(
+                mgf=padding.<span class="fn">MGF1</span>(hashes.<span class="fn">SHA256</span>()),
+                salt_length=padding.PSS.<span class="num">MAX_LENGTH</span>
+            ),
+            hashes.<span class="fn">SHA256</span>()
+        )
+        <span class="kw">return</span> <span class="cls">True</span>
+    <span class="kw">except</span> <span class="cls">Exception</span>:
+        <span class="kw">return</span> <span class="cls">False</span></pre>
+        </div>
+
+        <div class="usage-label">Called from</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/routes/request_routes.py</span>
+            <span class="loc-line">sign_agreement() route</span>
+          </div>
+          <pre class="loc-code"><span class="cm"># Landlord signs first</span>
+sig = <span class="fn">rsa_sign</span>(current_user.private_key_pem, agreement.document_hash_sha256)
+agreement.landlord_signature = sig
+
+<span class="cm"># Tenant verifies landlord sig before signing</span>
+ok = <span class="fn">rsa_verify</span>(landlord.public_key_pem,
+                agreement.document_hash_sha256,
+                agreement.landlord_signature)
+<span class="kw">if not</span> ok:
+    <span class="fn">flash</span>(<span class="str">'Landlord signature invalid'</span>, <span class="str">'danger'</span>)</pre>
+        </div>
+
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/routes/verification_routes.py</span>
+            <span class="loc-line">QR public verify — line 31–43</span>
+          </div>
+          <pre class="loc-code"><span class="cm"># Re-verified on every public QR scan</span>
+landlord_sig_valid = <span class="fn">rsa_verify</span>(
+    landlord.public_key_pem,
+    agreement.document_hash_sha256,
+    agreement.landlord_signature
+)
+tenant_sig_valid = <span class="fn">rsa_verify</span>(
+    tenant.public_key_pem,
+    agreement.document_hash_sha256,
+    agreement.tenant_signature
+)</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- AES-256-GCM -->
+    <div class="algo-card">
+      <div class="algo-head">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        <div class="algo-head-text">
+          <div class="name">AES-256-GCM Encryption</div>
+          <div class="type">Symmetric · Files · Photos · Chat</div>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p class="algo-desc">
+          AES-256-GCM provides <strong>confidentiality</strong> (nobody can read the ciphertext) and <strong>authenticity</strong> (built-in 128-bit authentication tag detects tampering).
+          A fresh random 12-byte nonce is generated for every encryption call — reusing a nonce would be catastrophic for GCM security.
+        </p>
+        <div class="usage-label">Agreement file encryption</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/crypto_service.py</span>
+            <span class="loc-line">line 56–73</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">encrypt_file_aes256gcm</span>(file_path, output_path):
+    aes_key = <span class="cls">AESGCM</span>.<span class="fn">generate_key</span>(bit_length=<span class="num">256</span>)
+    nonce   = os.<span class="fn">urandom</span>(<span class="num">12</span>)          <span class="cm"># fresh per file</span>
+    aesgcm  = <span class="cls">AESGCM</span>(aes_key)
+    ciphertext = aesgcm.<span class="fn">encrypt</span>(nonce, plaintext, <span class="cls">None</span>)
+    <span class="cm"># writes ciphertext to disk</span></pre>
+        </div>
+
+        <div class="usage-label">Chat thread-key wrapping (master key encrypts thread key)</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/chat_service.py</span>
+            <span class="loc-line">line 19–27</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">generate_thread_key</span>() -> str:
+    raw_key = <span class="cls">AESGCM</span>.<span class="fn">generate_key</span>(bit_length=<span class="num">256</span>)  <span class="cm"># random thread key</span>
+    master  = <span class="fn">_master_key</span>()                        <span class="cm"># from SECRET_KEY</span>
+    nonce   = os.<span class="fn">urandom</span>(<span class="num">12</span>)
+    aesgcm  = <span class="cls">AESGCM</span>(master)
+    encrypted = aesgcm.<span class="fn">encrypt</span>(nonce, raw_key, <span class="cls">None</span>)
+    payload = nonce + encrypted                    <span class="cm"># nonce prepended</span>
+    <span class="kw">return</span> base64.<span class="fn">b64encode</span>(payload).<span class="fn">decode</span>()</pre>
+        </div>
+
+        <div class="usage-label">Per-message chat encryption</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/chat_service.py</span>
+            <span class="loc-line">line 39–51</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">encrypt_message</span>(thread_key_b64, plaintext):
+    thread_key = <span class="fn">_decrypt_thread_key</span>(thread_key_b64)
+    nonce      = os.<span class="fn">urandom</span>(<span class="num">12</span>)       <span class="cm"># fresh nonce per message</span>
+    aesgcm     = <span class="cls">AESGCM</span>(thread_key)
+    ciphertext = aesgcm.<span class="fn">encrypt</span>(nonce, plaintext_bytes, <span class="cls">None</span>)
+    <span class="kw">return</span> ciphertext_b64, nonce_b64, msg_hash</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- SHA-256 -->
+    <div class="algo-card">
+      <div class="algo-head">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        <div class="algo-head-text">
+          <div class="name">SHA-256 Hash</div>
+          <div class="type">Hash function · Integrity everywhere</div>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p class="algo-desc">
+          SHA-256 turns any data into a fixed 64-character hex string. Change one byte of the input and the hash changes completely. Used to fingerprint documents, photos, chat messages, and the PDF — and to derive the server master key.
+        </p>
+        <div class="usage-label">Document hash (tamper detection)</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/crypto_service.py</span>
+            <span class="loc-line">line 52–53</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">sha256_hash_bytes</span>(data: <span class="cls">bytes</span>) -> <span class="cls">str</span>:
+    <span class="kw">return</span> hashlib.<span class="fn">sha256</span>(data).<span class="fn">hexdigest</span>()</pre>
+        </div>
+
+        <div class="usage-label">Chunked file hash (large files)</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/crypto_service.py</span>
+            <span class="loc-line">line 44–49</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">sha256_hash_file</span>(file_path):
+    h = hashlib.<span class="fn">sha256</span>()
+    <span class="kw">with</span> <span class="fn">open</span>(file_path, <span class="str">'rb'</span>) <span class="kw">as</span> f:
+        <span class="kw">for</span> chunk <span class="kw">in</span> <span class="fn">iter</span>(<span class="kw">lambda</span>: f.<span class="fn">read</span>(<span class="num">8192</span>), b<span class="str">''</span>):
+            h.<span class="fn">update</span>(chunk)
+    <span class="kw">return</span> h.<span class="fn">hexdigest</span>()</pre>
+        </div>
+
+        <div class="usage-label">Master key derivation from SECRET_KEY</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/chat_service.py</span>
+            <span class="loc-line">line 13–16</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">_master_key</span>() -> <span class="cls">bytes</span>:
+    <span class="cm"># Turns Flask SECRET_KEY string → 32-byte AES key</span>
+    secret = current_app.config[<span class="str">'SECRET_KEY'</span>].<span class="fn">encode</span>(<span class="str">'utf-8'</span>)
+    <span class="kw">return</span> hashlib.<span class="fn">sha256</span>(secret).<span class="fn">digest</span>()   <span class="cm"># .digest() = raw bytes</span></pre>
+        </div>
+
+        <div class="usage-label">Per-message integrity hash</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/chat_service.py</span>
+            <span class="loc-line">line 46</span>
+          </div>
+          <pre class="loc-code">msg_hash = hashlib.<span class="fn">sha256</span>(plaintext_bytes).<span class="fn">hexdigest</span>()
+<span class="cm"># stored as ChatMessage.message_hash in DB</span></pre>
+        </div>
+
+        <div class="usage-label">Identity photo hash</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/routes/photo_routes.py</span>
+            <span class="loc-line">line 69</span>
+          </div>
+          <pre class="loc-code">photo_hash = hashlib.<span class="fn">sha256</span>(photo_bytes).<span class="fn">hexdigest</span>()
+<span class="cm"># stored as IdentityPhoto.photo_hash_sha256</span></pre>
+        </div>
+
+        <div class="usage-label">PDF file integrity hash</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/pdf_service.py</span>
+            <span class="loc-line">line 233</span>
+          </div>
+          <pre class="loc-code"><span class="kw">return</span> hashlib.<span class="fn">sha256</span>(
+    <span class="fn">open</span>(output_path, <span class="str">'rb'</span>).<span class="fn">read</span>()
+).<span class="fn">hexdigest</span>()
+<span class="cm"># stored as GeneratedPDF.pdf_hash_sha256</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- RSA-OAEP -->
+    <div class="algo-card">
+      <div class="algo-head">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+        <div class="algo-head-text">
+          <div class="name">RSA-OAEP + SHA-256</div>
+          <div class="type">Asymmetric · Key wrapping (hybrid encryption)</div>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p class="algo-desc">
+          OAEP (Optimal Asymmetric Encryption Padding) encrypts small payloads (like a 32-byte AES key) with a recipient's RSA public key.
+          This is the "hybrid encryption" pattern: AES-256-GCM encrypts the large data, RSA-OAEP encrypts the AES key itself.
+        </p>
+        <div class="usage-label">Encrypt a key with RSA public key</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/crypto_service.py</span>
+            <span class="loc-line">line 129–139</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">encrypt_rsa_oaep</span>(public_key_pem, plaintext_bytes):
+    public_key = <span class="fn">load_public_key</span>(public_key_pem)
+    ciphertext = public_key.<span class="fn">encrypt</span>(
+        plaintext_bytes,
+        padding.<span class="fn">OAEP</span>(
+            mgf=padding.<span class="fn">MGF1</span>(algorithm=hashes.<span class="fn">SHA256</span>()),
+            algorithm=hashes.<span class="fn">SHA256</span>(),
+            label=<span class="cls">None</span>
+        )
+    )
+    <span class="kw">return</span> base64.<span class="fn">b64encode</span>(ciphertext).<span class="fn">decode</span>()</pre>
+        </div>
+
+        <div class="usage-label">Decrypt with RSA private key</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/crypto_service.py</span>
+            <span class="loc-line">line 143–153</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">decrypt_rsa_oaep</span>(private_key_pem, ciphertext_b64):
+    private_key = <span class="fn">load_private_key</span>(private_key_pem)
+    plaintext = private_key.<span class="fn">decrypt</span>(
+        ciphertext,
+        padding.<span class="fn">OAEP</span>(
+            mgf=padding.<span class="fn">MGF1</span>(algorithm=hashes.<span class="fn">SHA256</span>()),
+            algorithm=hashes.<span class="fn">SHA256</span>(),
+            label=<span class="cls">None</span>
+        )
+    )
+    <span class="kw">return</span> plaintext</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- X.509 -->
+    <div class="algo-card">
+      <div class="algo-head">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+        <div class="algo-head-text">
+          <div class="name">X.509 Certificates (PKI)</div>
+          <div class="type">Standard · Identity binding per user</div>
+        </div>
+      </div>
+      <div class="algo-body">
+        <p class="algo-desc">
+          The Demo CA issues a signed X.509 certificate to every user on registration, binding their name, email, and RSA public key.
+          The CA itself is an ephemeral RSA-2048 self-signed certificate created at app startup.
+          Certificates can be revoked — revocation is checked on every QR scan.
+        </p>
+        <div class="usage-label">Demo CA creation (app startup)</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/certificate_service.py</span>
+            <span class="loc-line">line 23–40</span>
+          </div>
+          <pre class="loc-code">subject = issuer = x509.<span class="fn">Name</span>([
+    x509.<span class="fn">NameAttribute</span>(<span class="cls">NameOID</span>.COMMON_NAME, <span class="str">'Valid Rent Demo CA'</span>),
+    x509.<span class="fn">NameAttribute</span>(<span class="cls">NameOID</span>.COUNTRY_NAME, <span class="str">'NP'</span>),
+])
+ca_cert = (
+    x509.<span class="fn">CertificateBuilder</span>()
+    .<span class="fn">not_valid_after</span>(now + timedelta(days=<span class="num">3650</span>))   <span class="cm"># 10 years</span>
+    .<span class="fn">add_extension</span>(x509.<span class="fn">BasicConstraints</span>(ca=<span class="cls">True</span>, ...), critical=<span class="cls">True</span>)
+    .<span class="fn">sign</span>(ca_key, hashes.<span class="fn">SHA256</span>(), <span class="fn">default_backend</span>())
+)</pre>
+        </div>
+
+        <div class="usage-label">User certificate issuance (on registration)</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/certificate_service.py</span>
+            <span class="loc-line">line 46–85</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">issue_certificate</span>(user_public_key_pem, user_full_name, user_email):
+    cert = (
+        x509.<span class="fn">CertificateBuilder</span>()
+        .<span class="fn">subject_name</span>(subject)                <span class="cm"># name + email</span>
+        .<span class="fn">issuer_name</span>(ca_cert.subject)          <span class="cm"># signed by Demo CA</span>
+        .<span class="fn">public_key</span>(public_key)               <span class="cm"># user's RSA-2048 pubkey</span>
+        .<span class="fn">not_valid_after</span>(now + timedelta(days=<span class="num">365</span>))  <span class="cm"># 1 year</span>
+        .<span class="fn">sign</span>(ca_key, hashes.<span class="fn">SHA256</span>(), <span class="fn">default_backend</span>())
+    )</pre>
+        </div>
+
+        <div class="usage-label">Certificate verification (QR scan)</div>
+        <div class="location-item">
+          <div class="loc-header">
+            <span class="loc-file">app/services/certificate_service.py</span>
+            <span class="loc-line">line 88–110</span>
+          </div>
+          <pre class="loc-code"><span class="kw">def</span> <span class="fn">verify_certificate</span>(cert_pem):
+    cert = x509.<span class="fn">load_pem_x509_certificate</span>(cert_pem.<span class="fn">encode</span>())
+    <span class="cm"># 1. Check expiry</span>
+    <span class="kw">if</span> cert.not_valid_after_utc < now:
+        <span class="kw">return</span> <span class="cls">False</span>, <span class="str">'Certificate has expired'</span>
+    <span class="cm"># 2. Verify CA signature on the cert</span>
+    ca_cert.public_key().<span class="fn">verify</span>(
+        cert.signature,
+        cert.tbs_certificate_bytes, ...
+    )
+    <span class="kw">return</span> <span class="cls">True</span>, <span class="str">'Valid'</span></pre>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /algo-grid -->
+
+  <!-- ── FULL REFERENCE TABLE ─────────────────────────────────── -->
+  <div class="ref-section">
+    <h2>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      All 20 Crypto Calls — Quick Reference
+    </h2>
+    <div style="overflow-x:auto">
+      <table class="ref-table">
+        <thead>
+          <tr>
+            <th>Algorithm</th>
+            <th>File</th>
+            <th>Line</th>
+            <th>Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="algo-tag tag-rsa">RSA-2048</span>keygen</td>
+            <td>app/services/crypto_service.py</td>
+            <td>12–16</td>
+            <td>User key pair generation on registration</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-rsa">RSA-2048</span>keygen</td>
+            <td>app/services/certificate_service.py</td>
+            <td>20–22</td>
+            <td>Demo CA key (generated once at startup)</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-rsa">RSA-PSS</span>sign</td>
+            <td>app/services/crypto_service.py</td>
+            <td>96–104</td>
+            <td>Sign document hash — <code>rsa_sign()</code></td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-rsa">RSA-PSS</span>verify</td>
+            <td>app/services/crypto_service.py</td>
+            <td>114–123</td>
+            <td>Verify signature — <code>rsa_verify()</code></td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-rsa">RSA-PSS</span>verify</td>
+            <td>app/routes/verification_routes.py</td>
+            <td>31–43</td>
+            <td>QR scan: both sigs re-verified publicly</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-rsa">RSA-OAEP</span>encrypt</td>
+            <td>app/services/crypto_service.py</td>
+            <td>131–138</td>
+            <td>Wrap AES key with recipient's public key</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-rsa">RSA-OAEP</span>decrypt</td>
+            <td>app/services/crypto_service.py</td>
+            <td>146–153</td>
+            <td>Unwrap AES key with private key</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-aes">AES-256-GCM</span>encrypt</td>
+            <td>app/services/crypto_service.py</td>
+            <td>58–65</td>
+            <td>Encrypt agreement file on disk</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-aes">AES-256-GCM</span>decrypt</td>
+            <td>app/services/crypto_service.py</td>
+            <td>80–85</td>
+            <td>Decrypt agreement file for download</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-aes">AES-256-GCM</span>encrypt</td>
+            <td>app/services/chat_service.py</td>
+            <td>21–26</td>
+            <td>Master key wraps thread key at thread creation</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-aes">AES-256-GCM</span>decrypt</td>
+            <td>app/services/chat_service.py</td>
+            <td>31–36</td>
+            <td>Unwrap thread key before each message op</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-aes">AES-256-GCM</span>encrypt</td>
+            <td>app/services/chat_service.py</td>
+            <td>43–45</td>
+            <td>Encrypt each chat message before DB insert</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-aes">AES-256-GCM</span>decrypt</td>
+            <td>app/services/chat_service.py</td>
+            <td>58–60</td>
+            <td>Decrypt chat message for display</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-sha">SHA-256</span>hash</td>
+            <td>app/services/crypto_service.py</td>
+            <td>44–49</td>
+            <td>Chunked file hash (large files, 8 KB blocks)</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-sha">SHA-256</span>hash</td>
+            <td>app/services/crypto_service.py</td>
+            <td>53</td>
+            <td>Hash bytes → hex — <code>sha256_hash_bytes()</code></td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-sha">SHA-256</span>derive</td>
+            <td>app/services/chat_service.py</td>
+            <td>16</td>
+            <td>Derive 32-byte master key from SECRET_KEY</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-sha">SHA-256</span>hash</td>
+            <td>app/services/chat_service.py</td>
+            <td>46</td>
+            <td>Per-message integrity hash stored in DB</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-sha">SHA-256</span>hash</td>
+            <td>app/routes/photo_routes.py</td>
+            <td>69</td>
+            <td>Hash identity photo bytes before encryption</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-sha">SHA-256</span>hash</td>
+            <td>app/services/pdf_service.py</td>
+            <td>233</td>
+            <td>Hash generated PDF file for integrity record</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-x509">X.509</span>build+sign</td>
+            <td>app/services/certificate_service.py</td>
+            <td>31–40 / 66–75</td>
+            <td>CA cert + user cert creation via CertificateBuilder</td>
+          </tr>
+          <tr>
+            <td><span class="algo-tag tag-x509">X.509</span>verify</td>
+            <td>app/services/certificate_service.py</td>
+            <td>92–107</td>
+            <td>Expiry + CA signature verification on QR scan</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="note-box">
+    <strong>Academic Prototype:</strong>
+    The Demo CA is ephemeral — it is regenerated every time the app restarts, so previously issued certificates cannot be re-verified after a restart.
+    Private keys have no passphrase in this demo. All PDFs include the watermark
+    <em>"ACADEMIC PROTOTYPE – NOT AN OFFICIAL GOVERNMENT DOCUMENT"</em>.
+  </div>
+
+</div>
+{% endblock %}

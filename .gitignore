@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Flask / instance
+instance/
+*.db
+*.sqlite3
+
+# Secrets
+.env
+*.key
+*.pem
+
+# Generated files (uploaded documents, photos, PDFs)
+app/static/uploads/
+instance/agreements/
+instance/photos/
+instance/pdfs/
+instance/qrcodes/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

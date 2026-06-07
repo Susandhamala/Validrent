@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block title %}{{ asset.asset_title }}{% endblock %}
+{% block page_title %}Asset Detail{% endblock %}
+
+{% block content %}
+<div class="page-header pop-in">
+  <div class="page-header-left">
+    <h1>{{ asset.asset_title }}</h1>
+    <p>{{ asset.category.name if asset.category else 'Uncategorized' }}
+       {% if asset.asset_type %}&mdash; {{ asset.asset_type }}{% endif %}
+    </p>
+  </div>
+  <div class="page-header-actions">
+    {% if current_user.role == 'landlord' %}
+    <a href="{{ url_for('asset.list_assets') }}" class="btn btn-outline">← My Assets</a>
+    <a href="{{ url_for('agreement.create_agreement') }}?asset_id={{ asset.id }}" class="btn btn-primary">Create Agreement</a>
+    {% else %}
+    <a href="{{ url_for('asset.browse') }}" class="btn btn-outline">← Browse</a>
+    <button class="btn btn-primary"
+            onclick="showInterest({{ asset.id }},'{{ asset.asset_title|e }}','{{ asset.owner.full_name|e }}','{{ asset.owner.email|e }}','{{ asset.owner.phone or ''|e }}')">
+      🤝 I'm Interested
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="grid-2 pop-in pop-in-delay-1" style="gap:20px">
+  <!-- LEFT: Details -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <!-- Asset info card -->
+    <div class="card">
+      <div class="card-body">
+        <div style="font-size:48px;margin-bottom:12px">
+          {% if asset.category %}
+            {% if asset.category.icon == 'home' %}🏠{% elif asset.category.icon == 'door-open' %}🚪{% elif asset.category.icon == 'building' %}🏢{% elif asset.category.icon == 'map' %}🗺️{% elif asset.category.icon == 'car' %}🚗{% elif asset.category.icon == 'bicycle' %}🛵{% elif asset.category.icon == 'gear' %}⚙️{% elif asset.category.icon == 'briefcase' %}💼{% elif asset.category.icon == 'box' %}📦{% else %}🏷️{% endif %}
+          {% else %}🏷️{% endif %}
+        </div>
+        <div class="section-title">Asset Details</div>
+        <div style="display:grid;gap:14px">
+          {% for label, val in [
+            ('Category', asset.category.name if asset.category else None),
+            ('Asset Type', asset.asset_type),
+            ('Identifier', asset.asset_identifier),
+            ('Location', asset.location),
+            ('Status', asset.status.title()),
+            ('Estimated Value', 'NPR ' + '{:,.0f}'.format(asset.estimated_value) if asset.estimated_value else None),
+            ('Listed On', asset.created_at.strftime('%d %b %Y')),
+          ] %}
+          {% if val %}
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--grey-100)">
+            <span class="text-muted text-sm">{{ label }}</span>
+            <span style="font-weight:600;text-align:right">{{ val }}</span>
+          </div>
+          {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Description -->
+    {% if asset.description %}
+    <div class="card">
+      <div class="card-body">
+        <div class="section-title">Description</div>
+        <p style="color:var(--grey-600);font-size:14px;line-height:1.8">{{ asset.description }}</p>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- RIGHT: Landlord + Status -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <!-- Landlord card -->
+    <div class="card">
+      <div class="card-body">
+        <div class="section-title">Listed By</div>
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+          <div style="width:52px;height:52px;border-radius:50%;background:var(--black);color:var(--white);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;flex-shrink:0">
+            {{ asset.owner.full_name[0].upper() }}
+          </div>
+          <div>
+            <div style="font-size:17px;font-weight:700">{{ asset.owner.full_name }}</div>
+            <div class="text-muted text-sm">Verified Landlord</div>
+          </div>
+        </div>
+        {% if current_user.role == 'tenant' %}
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <a href="mailto:{{ asset.owner.email }}" class="btn btn-outline btn-full">
+            ✉ {{ asset.owner.email }}
+          </a>
+          {% if asset.owner.phone %}
+          <a href="tel:{{ asset.owner.phone }}" class="btn btn-ghost btn-full">
+            📞 {{ asset.owner.phone }}
+          </a>
+          {% endif %}
+          <button class="btn btn-primary btn-full"
+                  onclick="showInterest({{ asset.id }},'{{ asset.asset_title|e }}','{{ asset.owner.full_name|e }}','{{ asset.owner.email|e }}','{{ asset.owner.phone or ''|e }}')">
+            🤝 I'm Interested — Contact Now
+          </button>
+        </div>
+        <div class="info-box" style="margin-top:14px;font-size:12px">
+          Once the landlord adds you to an agreement, it will appear in your <strong>Agreements</strong> tab for digital signing.
+        </div>
+        {% else %}
+        <div style="display:flex;gap:8px">
+          <a href="{{ url_for('agreement.create_agreement') }}?asset_id={{ asset.id }}" class="btn btn-primary btn-full">
+            Create Agreement for This Asset
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Status badge -->
+    <div class="card">
+      <div class="card-body" style="text-align:center;padding:28px">
+        <div style="font-size:36px;margin-bottom:8px">
+          {% if asset.status == 'available' %}✅{% elif asset.status == 'rented' %}🔒{% else %}⏸️{% endif %}
+        </div>
+        <div style="font-size:18px;font-weight:800">
+          {% if asset.status == 'available' %}Available for Rent
+          {% elif asset.status == 'rented' %}Currently Rented
+          {% else %}Temporarily Unavailable{% endif %}
+        </div>
+        <div class="text-muted text-sm" style="margin-top:6px">
+          {% if asset.status == 'available' %}This asset is ready for a new agreement.
+          {% elif asset.status == 'rented' %}This asset is under an active agreement.
+          {% else %}Check back later.{% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function showInterest(assetId, title, landlordName, email, phone) {
+  openModal(`
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:36px;margin-bottom:8px">🤝</div>
+      <div class="modal-title">Contact Landlord</div>
+      <div class="modal-body">You are interested in <strong>${title}</strong>.<br>
+      Contact the landlord to arrange a viewing and rental agreement.</div>
+    </div>
+    <div style="background:var(--grey-100);border-radius:var(--radius-sm);padding:16px;margin:16px 0;display:grid;gap:10px">
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--grey-500)">Landlord</div>
+        <div style="font-weight:700">${landlordName}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--grey-500)">Email</div>
+        <a href="mailto:${email}" style="color:var(--black);font-weight:600">${email}</a>
+      </div>
+      ${phone ? `<div><div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--grey-500)">Phone</div><a href="tel:${phone}" style="color:var(--black);font-weight:600">${phone}</a></div>` : ''}
+    </div>
+    <div class="info-box" style="font-size:12px">
+      The landlord will create an agreement with your account. It will appear in your <strong>Agreements</strong> section to sign.
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Close</button>
+      <a href="mailto:${email}?subject=Rental Inquiry — ${encodeURIComponent(title)}&body=Hello ${landlordName},%0A%0AI am interested in your property: ${title}.%0A%0APlease let me know the next steps.%0A%0AThank you." class="btn btn-primary">Send Email</a>
+    </div>
+  `);
+}
+</script>
+{% endblock %}

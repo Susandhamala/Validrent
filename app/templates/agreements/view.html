@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Agreement Detail{% endblock %}
+{% block page_title %}Agreement Details{% endblock %}
+
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+<div class="page-header pop-in">
+  <div class="page-header-left">
+    <h1>Rental Agreement</h1>
+    <p class="font-mono" style="font-size:12px">{{ agreement.agreement_uid }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('agreement.list_agreements') }}" class="btn btn-outline">← Back</a>
+    {% if agreement.is_fully_signed %}
+      {% if agreement.final_pdf_status == 'generated' %}
+      <a href="{{ url_for('pdf.view_certificate', agreement_id=agreement.id) }}" class="btn btn-outline">📄 View Certificate</a>
+      <a href="{{ url_for('pdf.download_pdf', agreement_id=agreement.id) }}" class="btn btn-primary">⬇ Download PDF</a>
+      {% else %}
+      <form method="POST" action="{{ url_for('pdf.generate_pdf', agreement_id=agreement.id) }}" style="display:inline">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success">Generate Certificate PDF</button>
+      </form>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<!-- STATUS BAR -->
+<div class="steps pop-in pop-in-delay-1">
+  <div class="step {% if agreement.status in ('pending_tenant','landlord_signed','fully_signed','verified') %}done{% else %}active{% endif %}">
+    <div class="step-num">{% if agreement.status in ('pending_tenant','landlord_signed','fully_signed','verified') %}✓{% else %}1{% endif %}</div>
+    <span>Created</span>
+  </div>
+  <div class="step-line {% if agreement.status in ('landlord_signed','fully_signed','verified') %}done{% endif %}"></div>
+  <div class="step {% if agreement.status in ('landlord_signed','fully_signed','verified') %}done{% elif agreement.status == 'pending_tenant' %}active{% endif %}">
+    <div class="step-num">{% if agreement.status in ('landlord_signed','fully_signed','verified') %}✓{% else %}2{% endif %}</div>
+    <span>Landlord Signed</span>
+  </div>
+  <div class="step-line {% if agreement.status in ('fully_signed','verified') %}done{% endif %}"></div>
+  <div class="step {% if agreement.status in ('fully_signed','verified') %}done{% elif agreement.status == 'landlord_signed' %}active{% endif %}">
+    <div class="step-num">{% if agreement.status in ('fully_signed','verified') %}✓{% else %}3{% endif %}</div>
+    <span>Tenant Signed</span>
+  </div>
+  <div class="step-line {% if agreement.final_pdf_status == 'generated' %}done{% endif %}"></div>
+  <div class="step {% if agreement.final_pdf_status == 'generated' %}done{% elif agreement.is_fully_signed %}active{% endif %}">
+    <div class="step-num">{% if agreement.final_pdf_status == 'generated' %}✓{% else %}4{% endif %}</div>
+    <span>Certificate</span>
+  </div>
+</div>
+
+<div class="grid-2 pop-in pop-in-delay-2" style="gap:16px;margin-bottom:16px">
+  <!-- AGREEMENT INFO -->
+  <div class="card">
+    <div class="card-body">
+      <div class="section-title">Agreement Details</div>
+      <div style="display:grid;gap:10px">
+        {% for label, val in [
+          ('Category', agreement.rental_category),
+          ('Start Date', agreement.start_date|string if agreement.start_date else None),
+          ('End Date', agreement.end_date|string if agreement.end_date else None),
+          ('Monthly Rent', (agreement.currency + ' ' + '{:,.0f}'.format(agreement.rent_amount)) if agreement.rent_amount else None),
+          ('Created', agreement.created_at.strftime('%d %b %Y %H:%M')),
+        ] %}
+        {% if val %}
+        <div>
+          <div class="text-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px">{{ label }}</div>
+          <div style="font-weight:600">{{ val }}</div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- PARTIES -->
+  <div class="card">
+    <div class="card-body">
+      <div class="section-title">Parties</div>
+      <div style="display:grid;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:40px;height:40px;border-radius:50%;background:var(--black);color:var(--white);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0">
+            {{ agreement.landlord.full_name[0].upper() }}
+          </div>
+          <div>
+            <div style="font-weight:700">{{ agreement.landlord.full_name }}</div>
+            <div class="text-muted text-sm">Landlord &bull; {{ agreement.landlord.email }}</div>
+            {% if landlord_cert %}
+            <span class="badge badge-{% if landlord_cert.is_valid %}success{% else %}danger{% endif %}" style="font-size:10px">Cert: {{ landlord_cert.status_display }}</span>
+            {% endif %}
+          </div>
+        </div>
+        {% if agreement.tenant %}
+        <div class="divider" style="margin:4px 0"></div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:40px;height:40px;border-radius:50%;background:var(--grey-200);color:var(--black);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px;flex-shrink:0">
+            {{ agreement.tenant.full_name[0].upper() }}
+          </div>
+          <div>
+            <div style="font-weight:700">{{ agreement.tenant.full_name }}</div>
+            <div class="text-muted text-sm">Tenant &bull; {{ agreement.tenant.email }}</div>
+            {% if tenant_cert %}
+            <span class="badge badge-{% if tenant_cert.is_valid %}success{% else %}danger{% endif %}" style="font-size:10px">Cert: {{ tenant_cert.status_display }}</span>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- INTEGRITY -->
+<div class="card pop-in pop-in-delay-3 mb-4">
+  <div class="card-body">
+    <div class="section-title">Document Integrity</div>
+    <div>
+      <div class="text-muted text-sm" style="margin-bottom:4px">SHA-256 Hash</div>
+      <div class="cert-hash">{{ agreement.document_hash_sha256 or 'N/A' }}</div>
+    </div>
+  </div>
+</div>
+
+<!-- SIGNATURES -->
+<div class="grid-2 pop-in pop-in-delay-3" style="gap:16px;margin-bottom:16px">
+  <!-- LANDLORD SIGNATURE -->
+  <div class="card">
+    <div class="card-body">
+      <div class="section-title">Landlord Signature</div>
+      {% if agreement.landlord_signature %}
+      <span class="badge badge-success">✓ Signed</span>
+      <div class="text-muted text-sm" style="margin-top:6px">{{ agreement.landlord_signed_at.strftime('%d %b %Y %H:%M') if agreement.landlord_signed_at else '' }}</div>
+      <div class="cert-hash" style="margin-top:8px;font-size:10px">{{ agreement.landlord_signature[:80] }}...</div>
+      {% elif current_user.id == agreement.landlord_id %}
+      <p class="text-muted" style="font-size:13px;margin-bottom:16px">You have not signed this agreement yet.</p>
+      <form method="POST" action="{{ url_for('agreement.sign_agreement', agreement_id=agreement.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="button" class="btn btn-primary"
+                onclick="confirmAction('Sign this agreement with your RSA-2048 private key?','signFormL')">
+          ✍ Sign as Landlord
+        </button>
+        <form id="signFormL" method="POST" action="{{ url_for('agreement.sign_agreement', agreement_id=agreement.id) }}" style="display:none">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        </form>
+      </form>
+      {% else %}
+      <span class="badge badge-warning">Pending</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- TENANT SIGNATURE -->
+  <div class="card">
+    <div class="card-body">
+      <div class="section-title">Tenant Signature</div>
+      {% if agreement.tenant_signature %}
+      <span class="badge badge-success">✓ Signed</span>
+      <div class="text-muted text-sm" style="margin-top:6px">{{ agreement.tenant_signed_at.strftime('%d %b %Y %H:%M') if agreement.tenant_signed_at else '' }}</div>
+      <div class="cert-hash" style="margin-top:8px;font-size:10px">{{ agreement.tenant_signature[:80] }}...</div>
+      {% elif current_user.id == agreement.tenant_id %}
+      <p class="text-muted" style="font-size:13px;margin-bottom:8px">
+        {% if not agreement.landlord_signature %}
+        The landlord must sign first.
+        {% else %}
+        The landlord has signed. You can now verify and sign.
+        {% endif %}
+      </p>
+      {% if agreement.landlord_signature %}
+      <form id="signFormT" method="POST" action="{{ url_for('agreement.sign_agreement', agreement_id=agreement.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      </form>
+      <button type="button" class="btn btn-primary"
+              onclick="confirmAction('Verify landlord signature and sign this agreement?','signFormT')">
+        ✍ Verify &amp; Sign as Tenant
+      </button>
+      {% endif %}
+      {% else %}
+      <span class="badge badge-warning">Pending</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- PHOTO CAPTURE -->
+{% if agreement.is_fully_signed or agreement.status != 'draft' %}
+<div class="card pop-in pop-in-delay-4">
+  <div class="card-body">
+    <div class="section-title">Identity Photo Evidence</div>
+    <p class="text-muted" style="font-size:13px;margin-bottom:16px">
+      Capture your identity photo as evidence for this agreement. This photo is for verification purposes only.
+    </p>
+    {% set my_photo = agreement.photos.filter_by(user_id=current_user.id).first() %}
+    {% if my_photo %}
+    <span class="badge badge-success">✓ Your photo is on file</span>
+    <div class="text-muted text-sm" style="margin-top:4px">Captured: {{ my_photo.captured_at.strftime('%d %b %Y %H:%M') }}</div>
+    {% endif %}
+    <div style="margin-top:12px">
+      <a href="{{ url_for('photo.capture_photo', agreement_id=agreement.id) }}" class="btn btn-outline">
+        📷 {% if my_photo %}Recapture{% else %}Capture{% endif %} Photo
+      </a>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

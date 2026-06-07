@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}{{ tr.nav_dashboard }}{% endblock %}
+{% block page_title %}{{ tr.nav_dashboard }}{% endblock %}
+
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+<div class="page-header pop-in">
+  <div class="page-header-left">
+    <h1>{{ tr.hello }}, {{ current_user.full_name.split()[0] }} 👋</h1>
+    <p>{{ current_user.display_role }} {{ tr.account }} &mdash; Valid Rent Secure Platform</p>
+  </div>
+  <div class="page-header-actions">
+    {% if current_user.role == 'landlord' %}
+    <a href="{{ url_for('asset.create_asset') }}" class="btn btn-outline">{{ tr.btn_new_asset }}</a>
+    <a href="{{ url_for('agreement.create_agreement') }}" class="btn btn-primary">{{ tr.btn_new_agreement }}</a>
+    {% else %}
+    <a href="{{ url_for('asset.browse') }}" class="btn btn-primary">{{ tr.btn_browse }}</a>
+    {% endif %}
+  </div>
+</div>
+
+{% if pending_requests %}
+<div style="background:var(--black);color:var(--white);border-radius:var(--radius);padding:16px 20px;margin-bottom:20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap" class="pop-in">
+  <div style="font-size:24px">📋</div>
+  <div style="flex:1">
+    <div style="font-weight:700;font-size:15px">{{ pending_requests|length }} {{ tr.pending_requests_alert }}</div>
+    <div style="font-size:12px;opacity:.7">{{ tr.from }}: {% for r in pending_requests %}{{ r.tenant.full_name }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+  </div>
+  <a href="{{ url_for('req.list_requests') }}" class="btn btn-sm" style="background:var(--white);color:var(--black);flex-shrink:0">{{ tr.btn_review_now }}</a>
+</div>
+{% endif %}
+
+<!-- STATS -->
+<div class="stats-grid">
+  <div class="stat-card dark pop-in pop-in-delay-1">
+    <div class="stat-number">{{ total_agreements }}</div>
+    <div class="stat-label">{{ tr.stat_total_agreements }}</div>
+    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+  </div>
+  <div class="stat-card pop-in pop-in-delay-2">
+    <div class="stat-number">{{ verified }}</div>
+    <div class="stat-label">{{ tr.stat_verified }}</div>
+    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+  </div>
+  <div class="stat-card pop-in pop-in-delay-3">
+    <div class="stat-number">{{ pending }}</div>
+    <div class="stat-label">{{ tr.stat_pending }}</div>
+    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+  </div>
+  {% if current_user.role == 'landlord' %}
+  <div class="stat-card pop-in pop-in-delay-4">
+    <div class="stat-number">{{ total_assets }}</div>
+    <div class="stat-label">{{ tr.stat_assets }}</div>
+    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>
+  </div>
+  <div class="stat-card pop-in pop-in-delay-5" style="{% if pending_requests %}border:2px solid var(--danger){% endif %}">
+    <div class="stat-number">{{ pending_requests|length }}</div>
+    <div class="stat-label">{{ tr.stat_new_requests }}</div>
+    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+  </div>
+  {% else %}
+  <div class="stat-card pop-in pop-in-delay-4">
+    <div class="stat-number">{{ my_requests|length }}</div>
+    <div class="stat-label">{{ tr.stat_my_requests }}</div>
+    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- CERTIFICATE STATUS -->
+{% if cert %}
+<div class="card pop-in pop-in-delay-2 mb-6">
+  <div class="card-header">
+    <div>
+      <div class="card-title">{{ tr.your_cert }}</div>
+      <div class="card-subtitle">{{ tr.cert_issued_by }}</div>
+    </div>
+    {% if cert.is_valid %}
+    <span class="badge badge-success">{{ tr.cert_valid }}</span>
+    {% elif cert.is_revoked %}
+    <span class="badge badge-danger">{{ tr.cert_revoked }}</span>
+    {% else %}
+    <span class="badge badge-warning">{{ tr.cert_expired }}</span>
+    {% endif %}
+  </div>
+  <div class="card-body">
+    <div class="grid-2" style="gap:12px">
+      <div>
+        <div class="text-muted" style="margin-bottom:2px">{{ tr.cert_serial }}</div>
+        <div class="font-mono" style="font-size:12px">{{ cert.serial_number[:32] }}...</div>
+      </div>
+      <div>
+        <div class="text-muted" style="margin-bottom:2px">{{ tr.cert_expires }}</div>
+        <div style="font-weight:600">{{ cert.expires_at.strftime('%d %b %Y') }}</div>
+      </div>
+      <div>
+        <div class="text-muted" style="margin-bottom:2px">{{ tr.cert_issued }}</div>
+        <div>{{ cert.issued_at.strftime('%d %b %Y') }}</div>
+      </div>
+      <div>
+        <div class="text-muted" style="margin-bottom:2px">{{ tr.cert_subject }}</div>
+        <div>{{ cert.subject_cn }}</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% else %}
+<div class="alert alert-warning pop-in mb-6">{{ tr.no_cert }}</div>
+{% endif %}
+
+<!-- RECENT AGREEMENTS -->
+<div class="card pop-in pop-in-delay-3">
+  <div class="card-header">
+    <div>
+      <div class="card-title">{{ tr.recent_agreements }}</div>
+      <div class="card-subtitle">{{ tr.recent_agreements_sub }}</div>
+    </div>
+    <a href="{{ url_for('agreement.list_agreements') }}" class="btn btn-sm btn-outline">{{ tr.btn_view_all }}</a>
+  </div>
+  <div class="card-body" style="padding-top:12px">
+    {% if agreements %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>{{ tr.col_agreement_id }}</th>
+            <th>{{ tr.col_category }}</th>
+            {% if current_user.role == 'landlord' %}<th>{{ tr.col_tenant }}</th>{% else %}<th>{{ tr.col_landlord }}</th>{% endif %}
+            <th>{{ tr.col_rent }}</th>
+            <th>{{ tr.col_status }}</th>
+            <th>{{ tr.col_actions }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ag in agreements %}
+          <tr>
+            <td class="font-mono" style="font-size:12px">{{ ag.agreement_uid[:12] }}...</td>
+            <td>{{ ag.rental_category or '—' }}</td>
+            {% if current_user.role == 'landlord' %}
+            <td>{{ ag.tenant.full_name if ag.tenant else '—' }}</td>
+            {% else %}
+            <td>{{ ag.landlord.full_name }}</td>
+            {% endif %}
+            <td>{{ ag.currency }} {{ '{:,.0f}'.format(ag.rent_amount or 0) }}</td>
+            <td>
+              {% if ag.status == 'fully_signed' or ag.status == 'verified' %}
+              <span class="badge badge-success">{{ ag.status.replace('_',' ').title() }}</span>
+              {% elif ag.status == 'landlord_signed' %}
+              <span class="badge badge-info">{{ tr.stat_pending }}</span>
+              {% elif ag.status == 'pending_tenant' %}
+              <span class="badge badge-warning">{{ tr.stat_pending }}</span>
+              {% else %}
+              <span class="badge badge-grey">{{ ag.status.replace('_',' ').title() }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <a href="{{ url_for('agreement.view_agreement', agreement_id=ag.id) }}" class="btn btn-sm btn-ghost">{{ tr.btn_view }}</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center" style="padding:40px 0; color:var(--grey-400)">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin:0 auto 12px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      <div style="font-weight:600">{{ tr.no_agreements }}</div>
+      <div class="text-muted">{% if current_user.role == 'landlord' %}<a href="{{ url_for('agreement.create_agreement') }}" style="color:var(--black)">{{ tr.no_agreements_landlord }}</a>{% else %}{{ tr.no_agreements_tenant }}{% endif %}</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if current_user.role == 'landlord' and assets %}
+<div class="card mt-6 pop-in pop-in-delay-4">
+  <div class="card-header">
+    <div>
+      <div class="card-title">{{ tr.my_assets }}</div>
+      <div class="card-subtitle">{{ tr.my_assets_sub }}</div>
+    </div>
+    <a href="{{ url_for('asset.list_assets') }}" class="btn btn-sm btn-outline">{{ tr.btn_view_all }}</a>
+  </div>
+  <div class="card-body" style="padding-top:12px">
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>{{ tr.col_asset }}</th><th>{{ tr.col_category }}</th><th>{{ tr.col_location }}</th><th>{{ tr.col_status }}</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for a in assets %}
+          <tr>
+            <td><strong>{{ a.asset_title }}</strong></td>
+            <td>{{ a.category.name if a.category else '—' }}</td>
+            <td>{{ a.location or '—' }}</td>
+            <td>
+              {% if a.status == 'available' %}<span class="badge badge-success">{{ tr.status_available }}</span>
+              {% elif a.status == 'rented' %}<span class="badge badge-info">{{ tr.status_rented }}</span>
+              {% else %}<span class="badge badge-grey">{{ a.status.title() }}</span>{% endif %}
+            </td>
+            <td><a href="{{ url_for('asset.view_asset', asset_id=a.id) }}" class="btn btn-sm btn-ghost">{{ tr.btn_view }}</a></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

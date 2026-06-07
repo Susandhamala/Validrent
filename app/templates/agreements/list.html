@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Agreements{% endblock %}
+{% block page_title %}Rental Agreements{% endblock %}
+
+{% block content %}
+<div class="page-header pop-in">
+  <div class="page-header-left">
+    <h1>Rental Agreements</h1>
+    <p>All your signed and pending rental agreements</p>
+  </div>
+  {% if current_user.role == 'landlord' %}
+  <a href="{{ url_for('agreement.create_agreement') }}" class="btn btn-primary">+ New Agreement</a>
+  {% endif %}
+</div>
+
+{% if agreements %}
+<div class="card pop-in pop-in-delay-1">
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Agreement ID</th>
+          <th>Category</th>
+          <th>{% if current_user.role=='landlord' %}Tenant{% else %}Landlord{% endif %}</th>
+          <th>Rent</th>
+          <th>Period</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for ag in agreements %}
+        <tr class="pop-in pop-in-delay-{{ loop.index if loop.index <= 5 else 5 }}">
+          <td class="font-mono" style="font-size:12px">{{ ag.agreement_uid[:16] }}...</td>
+          <td>{{ ag.rental_category or '—' }}</td>
+          {% if current_user.role == 'landlord' %}
+          <td>{{ ag.tenant.full_name if ag.tenant else '—' }}</td>
+          {% else %}
+          <td>{{ ag.landlord.full_name }}</td>
+          {% endif %}
+          <td>{{ ag.currency }} {{ '{:,.0f}'.format(ag.rent_amount or 0) }}</td>
+          <td style="font-size:12px">
+            {{ ag.start_date or '—' }}<br>{{ ag.end_date or '—' }}
+          </td>
+          <td>
+            {% if ag.status in ('fully_signed','verified') %}<span class="badge badge-success">✓ {{ ag.status.replace('_',' ').title() }}</span>
+            {% elif ag.status == 'landlord_signed' %}<span class="badge badge-info">Landlord Signed</span>
+            {% elif ag.status == 'pending_tenant' %}<span class="badge badge-warning">Pending Tenant</span>
+            {% else %}<span class="badge badge-grey">{{ ag.status.replace('_',' ').title() }}</span>{% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('agreement.view_agreement', agreement_id=ag.id) }}" class="btn btn-sm btn-ghost">View</a>
+            {% if ag.final_pdf_status == 'generated' %}
+            <a href="{{ url_for('pdf.view_certificate', agreement_id=ag.id) }}" class="btn btn-sm btn-outline">📄 Cert</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card pop-in">
+  <div class="card-body text-center" style="padding:60px 20px">
+    <div style="font-size:48px;margin-bottom:16px">📄</div>
+    <div style="font-size:20px;font-weight:700;margin-bottom:8px">No agreements yet</div>
+    <div class="text-muted">
+      {% if current_user.role == 'landlord' %}
+      <a href="{{ url_for('agreement.create_agreement') }}" style="color:var(--black)">Create your first agreement →</a>
+      {% else %}
+      Wait for a landlord to create an agreement with you.
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

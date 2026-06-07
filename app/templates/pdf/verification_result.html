@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Verification Result{% endblock %}
+
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<div style="max-width:640px;margin:40px auto;padding:0 16px">
+
+  <div class="cert-preview pop-in" style="text-align:center;padding:40px 32px">
+    <div class="cert-watermark">ACADEMIC PROTOTYPE – NOT AN OFFICIAL GOVERNMENT DOCUMENT</div>
+
+    <div style="font-size:14px;color:var(--grey-500);text-transform:uppercase;letter-spacing:1px;margin-bottom:16px">
+      Valid Rent — QR Verification Result
+    </div>
+
+    <div class="verify-result {% if result == 'VALID' %}valid{% else %}invalid{% endif %}">
+      {{ result }}
+    </div>
+
+    {% if result == 'VALID' %}
+    <div style="font-size:18px;margin-top:12px;color:var(--grey-600)">
+      ✓ Agreement signatures and certificates are authentic
+    </div>
+    {% else %}
+    <div style="font-size:16px;margin-top:12px;color:var(--danger)">
+      ✗ {% if reason %}{{ reason }}{% else %}One or more checks failed{% endif %}
+    </div>
+    {% endif %}
+
+    {% if code %}
+    <div class="verify-code">Code: {{ code }}</div>
+    {% endif %}
+  </div>
+
+  {% if public_info %}
+  <div class="card pop-in pop-in-delay-1" style="margin-top:16px">
+    <div class="card-body">
+      <div class="section-title">Agreement Summary (Public)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        {% for label, val in [
+          ('Agreement ID', public_info.get('agreement_id')),
+          ('Category', public_info.get('rental_category')),
+          ('Status', public_info.get('status','').replace('_',' ').title()),
+          ('Start Date', public_info.get('start_date')),
+          ('End Date', public_info.get('end_date')),
+          ('Hash (partial)', public_info.get('document_hash_short')),
+        ] %}
+        {% if val %}
+        <div>
+          <div class="text-muted" style="font-size:11px;text-transform:uppercase;letter-spacing:.5px">{{ label }}</div>
+          <div style="font-weight:600;font-size:13px;font-family:{% if 'hash' in label.lower() or 'id' in label.lower() %}monospace{% else %}inherit{% endif %}">{{ val }}</div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  {% if checks %}
+  <div class="card pop-in pop-in-delay-2" style="margin-top:16px">
+    <div class="card-body">
+      <div class="section-title">Verification Checks</div>
+      <div style="display:grid;gap:10px">
+        {% for label, val in [
+          ('Landlord Signature', checks.get('landlord_signed')),
+          ('Tenant Signature', checks.get('tenant_signed')),
+          ('Landlord Certificate', checks.get('landlord_cert_valid')),
+          ('Tenant Certificate', checks.get('tenant_cert_valid')),
+          ('Landlord Cert Not Revoked', not checks.get('landlord_cert_revoked', True)),
+          ('Tenant Cert Not Revoked', not checks.get('tenant_cert_revoked', True)),
+        ] %}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--grey-100)">
+          <span style="font-size:14px">{{ label }}</span>
+          <span class="badge {% if val %}badge-success{% else %}badge-danger{% endif %}">
+            {% if val %}✓ Pass{% else %}✗ Fail{% endif %}
+          </span>
+        </div>
+        {% endfor %}
+
+        {% if checks.get('document_hash') %}
+        <div style="margin-top:8px">
+          <div class="text-muted text-sm">Document Hash</div>
+          <div class="cert-hash" style="font-size:10px">{{ checks.document_hash }}</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <div class="warning-box pop-in pop-in-delay-3" style="margin-top:16px;font-size:11px">
+    <strong>ACADEMIC PROTOTYPE</strong> — This verification system is not affiliated with the Government of Nepal. For educational purposes only.
+  </div>
+</div>
+{% endblock %}

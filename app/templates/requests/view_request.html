@@ -1,0 +1,448 @@
+{% extends "base.html" %}
+{% block title %}Request #{{ req.id }}{% endblock %}
+{% block page_title %}Rental Request{% endblock %}
+
+{% block head %}
+<style>
+/* ── WORKFLOW TRACKER ─── */
+.workflow { display:flex; align-items:flex-start; gap:0; margin-bottom:28px; overflow-x:auto; padding-bottom:4px; }
+.wf-step { display:flex; flex-direction:column; align-items:center; gap:6px; min-width:100px; }
+.wf-dot { width:36px; height:36px; border-radius:50%; border:2px solid var(--grey-300); display:flex; align-items:center; justify-content:center; font-size:16px; background:var(--white); flex-shrink:0; transition:all .2s; }
+.wf-dot.done { background:var(--black); border-color:var(--black); color:var(--white); }
+.wf-dot.active { border-color:var(--black); background:var(--white); box-shadow:0 0 0 3px rgba(0,0,0,.1); }
+.wf-label { font-size:10px; font-weight:600; text-align:center; color:var(--grey-500); text-transform:uppercase; letter-spacing:.3px; line-height:1.3; }
+.wf-label.done { color:var(--black); }
+.wf-line { flex:1; height:2px; background:var(--grey-200); margin-top:17px; min-width:20px; }
+.wf-line.done { background:var(--black); }
+
+/* ── CHAT ─── */
+.chat-wrap { display:flex; flex-direction:column; height:380px; }
+.chat-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+.chat-msg { max-width:72%; }
+.chat-msg.mine { align-self:flex-end; }
+.chat-msg.other { align-self:flex-start; }
+.chat-msg.system-msg { align-self:center; max-width:90%; }
+.bubble { padding:10px 14px; border-radius:14px; font-size:13px; line-height:1.5; }
+.mine .bubble { background:var(--black); color:var(--white); border-bottom-right-radius:3px; }
+.other .bubble { background:var(--grey-100); color:var(--black); border-bottom-left-radius:3px; }
+.system-msg .bubble { background:var(--grey-100); color:var(--grey-600); font-size:12px; text-align:center; border-radius:8px; font-style:italic; }
+.msg-meta { font-size:10px; color:var(--grey-400); margin-top:3px; }
+.mine .msg-meta { text-align:right; }
+.chat-input { display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--grey-200); }
+.chat-input textarea { flex:1; border:1.5px solid var(--grey-200); border-radius:var(--radius-sm); padding:10px 12px; font-size:14px; font-family:var(--font); resize:none; height:44px; transition:border-color .2s; }
+.chat-input textarea:focus { outline:none; border-color:var(--black); }
+
+/* ── STEP CARDS ─── */
+.step-card { border:1.5px solid var(--grey-200); border-radius:var(--radius); padding:18px 20px; margin-bottom:14px; }
+.step-card.done { border-color:var(--success); background:#f0fdf4; }
+.step-card.active { border-color:var(--black); }
+.step-card.locked { opacity:.55; }
+.step-card-title { font-size:14px; font-weight:700; display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+
+<div class="page-header pop-in">
+  <div class="page-header-left">
+    <h1>Rental Request</h1>
+    <p class="font-mono" style="font-size:12px">{{ req.request_uid }}</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('req.list_requests') }}" class="btn btn-outline">← Requests</a>
+    {% if gen_pdf %}
+    <a href="{{ url_for('pdf.download_pdf', agreement_id=agreement.id) }}" class="btn btn-primary">⬇ Download PDF</a>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── WORKFLOW TRACKER ─────────────────────────────────────────────── -->
+{% set st = req.status %}
+{% set steps = [
+  ('pending', 'Request\nSent', '📋'),
+  ('under_review', 'Under\nReview', '👀'),
+  ('negotiating', 'Negotiating', '💬'),
+  ('approved', 'Terms\nApproved', '✅'),
+  ('agreement_created', 'Draft\nGenerated', '📄'),
+  ('fully_signed', 'Signed &\nVerified', '🔐'),
+] %}
+{% set done_order = ['pending','under_review','negotiating','approved','agreement_created','fully_signed'] %}
+{% set current_idx = done_order.index(st) if st in done_order else 0 %}
+
+<div class="workflow pop-in pop-in-delay-1">
+  {% for skey, slabel, semoji in steps %}
+  {% set idx = loop.index0 %}
+  {% if idx > 0 %}<div class="wf-line {% if idx <= current_idx %}done{% endif %}"></div>{% endif %}
+  <div class="wf-step">
+    <div class="wf-dot {% if idx < current_idx %}done{% elif idx == current_idx %}active{% endif %}">
+      {% if idx < current_idx %}✓{% else %}{{ semoji }}{% endif %}
+    </div>
+    <div class="wf-label {% if idx <= current_idx %}done{% endif %}">{{ slabel }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="grid-2" style="gap:20px;align-items:start">
+
+<!-- LEFT: Details + Actions ─────────────────────────────────────── -->
+<div>
+
+  <!-- REQUEST SUMMARY -->
+  <div class="card pop-in pop-in-delay-1" style="margin-bottom:16px">
+    <div class="card-body">
+      <div class="section-title">Request Details</div>
+      <div style="display:grid;gap:10px">
+        {% set details = [
+          ('Category', req.rental_category),
+          ('Asset', req.asset.asset_title if req.asset else 'N/A'),
+          ('Location', req.asset.location if req.asset else 'N/A'),
+          ('Proposed Rent', req.currency ~ ' ' ~ '{:,.0f}'.format(req.proposed_rent or 0)),
+          ('Counter Rent', req.currency ~ ' ' ~ '{:,.0f}'.format(req.landlord_counter_rent or 0) if req.landlord_counter_rent else None),
+          ('Effective Rent', req.currency ~ ' ' ~ '{:,.0f}'.format(req.effective_rent or 0)),
+          ('Start Date', req.proposed_start_date|string if req.proposed_start_date else 'TBD'),
+          ('End Date', req.proposed_end_date|string if req.proposed_end_date else 'TBD'),
+          ('Status', req.status_label),
+          ('Created', req.created_at.strftime('%d %b %Y %H:%M')),
+        ] %}
+        {% for label, val in details %}
+        {% if val %}
+        <div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--grey-100)">
+          <span class="text-muted text-sm">{{ label }}</span>
+          <span style="font-weight:600;font-size:13px">{{ val }}</span>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- PARTIES -->
+  <div class="card pop-in pop-in-delay-2" style="margin-bottom:16px">
+    <div class="card-body">
+      <div class="section-title">Parties</div>
+      {% for label, user, cert_ok in [
+        ('Landlord', req.landlord, True),
+        ('Tenant', req.tenant, True),
+      ] %}
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 0;{% if not loop.last %}border-bottom:1px solid var(--grey-100){% endif %}">
+        <div style="width:38px;height:38px;border-radius:50%;background:{% if label=='Landlord' %}var(--black){% else %}var(--grey-200){% endif %};color:{% if label=='Landlord' %}var(--white){% else %}var(--black){% endif %};display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">{{ user.full_name[0].upper() }}</div>
+        <div>
+          <div style="font-weight:700;font-size:14px">{{ user.full_name }}</div>
+          <div class="text-muted text-sm">{{ label }} &bull; {{ user.email }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ── STEP-BY-STEP ACTIONS ────────────────────────────────── -->
+
+  {# STEP 1: Landlord reviews #}
+  {% if current_user.id == req.landlord_id and req.status == 'pending' %}
+  <div class="step-card active">
+    <div class="step-card-title">👀 Step 1 — Review This Request</div>
+    <p class="text-muted text-sm" style="margin-bottom:14px">Mark as under review to open the negotiation chat.</p>
+    <form method="POST" action="{{ url_for('req.mark_under_review', req_id=req.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-primary">Start Review &amp; Open Chat</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {# STEP 1b: Landlord counter-offer #}
+  {% if current_user.id == req.landlord_id and req.status in ('under_review','negotiating') %}
+  <div class="step-card active">
+    <div class="step-card-title">💬 Counter-Offer (Optional)</div>
+    <form method="POST" action="{{ url_for('req.counter_offer', req_id=req.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="form-grid" style="margin-bottom:10px">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Counter Rent ({{ req.currency }})</label>
+          <input type="number" name="counter_rent" class="form-control" placeholder="Your counter offer"
+                 value="{{ req.landlord_counter_rent or '' }}">
+        </div>
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">Note to Tenant</label>
+          <input type="text" name="landlord_note" class="form-control" placeholder="Optional note">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button type="submit" class="btn btn-outline btn-sm">Send Counter-Offer</button>
+      </div>
+    </form>
+    <div class="divider"></div>
+    <div class="step-card-title" style="color:var(--danger)">❌ Or Reject Request</div>
+    <form method="POST" action="{{ url_for('req.reject_request', req_id=req.id) }}" style="display:flex;gap:8px;align-items:center">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="reason" class="form-control" placeholder="Reason for rejection" style="flex:1">
+      <button type="button" class="btn btn-danger btn-sm" onclick="confirmAction('Reject this rental request?','rejectForm{{ req.id }}')">Reject</button>
+    </form>
+    <form id="rejectForm{{ req.id }}" method="POST" action="{{ url_for('req.reject_request', req_id=req.id) }}" style="display:none">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+  </div>
+  {% endif %}
+
+  {# STEP 2: Approve Terms (both) #}
+  {% if req.status in ('pending','under_review','negotiating','approved') %}
+  {% set terms_done = my_terms_approval and my_terms_approval.approved %}
+  <div class="step-card {% if terms_done %}done{% elif req.status in ('under_review','negotiating') %}active{% else %}locked{% endif %}">
+    <div class="step-card-title">
+      {% if terms_done %}✅{% else %}📋{% endif %}
+      Step 2 — Approve Proposed Terms
+    </div>
+    {% if terms_done %}
+    <div style="color:var(--success);font-size:13px;font-weight:600">✓ You have approved the terms</div>
+    {% if not terms_both %}<div class="text-muted text-sm">Waiting for the other party to approve…</div>{% endif %}
+    {% elif req.status in ('under_review','negotiating') %}
+    <p class="text-muted text-sm" style="margin-bottom:12px">
+      Effective Rent: <strong>{{ req.currency }} {{ '{:,.0f}'.format(req.effective_rent or 0) }}/month</strong> &bull;
+      Period: {{ req.proposed_start_date or 'TBD' }} → {{ req.proposed_end_date or 'TBD' }}
+    </p>
+    <form method="POST" action="{{ url_for('req.approve_terms', req_id=req.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="btn btn-success">✓ I Agree to These Terms</button>
+    </form>
+    {% else %}
+    <div class="text-muted text-sm">Available once both parties are in negotiation.</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# STEP 3: Approve Document #}
+  {% if req.agreement_id %}
+  {% set doc_done = my_doc_approval and my_doc_approval.approved %}
+  <div class="step-card {% if doc_done %}done{% else %}active{% endif %}">
+    <div class="step-card-title">
+      {% if doc_done %}✅{% else %}📄{% endif %}
+      Step 3 — Review &amp; Approve Bilingual Draft
+    </div>
+    {% if doc_done %}
+    <div style="color:var(--success);font-size:13px;font-weight:600">✓ Document approved</div>
+    {% if not doc_both %}<div class="text-muted text-sm">Waiting for other party…</div>{% endif %}
+    {% else %}
+    <p class="text-muted text-sm" style="margin-bottom:12px">
+      The bilingual legal agreement (English + Nepali) has been generated. Review and approve before signing.
+    </p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a href="{{ url_for('agreement.view_agreement', agreement_id=req.agreement_id) }}" class="btn btn-outline btn-sm">View Agreement</a>
+      <form method="POST" action="{{ url_for('req.approve_document', req_id=req.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success btn-sm">✓ Approve Document</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# STEP 4: Capture Photo #}
+  {% if req.agreement_id and doc_both %}
+  <div class="step-card {% if my_photo %}done{% else %}active{% endif %}">
+    <div class="step-card-title">
+      {% if my_photo %}✅{% else %}📷{% endif %}
+      Step 4 — Capture Identity Photo
+    </div>
+    {% if my_photo %}
+    <div style="color:var(--success);font-size:13px;font-weight:600">✓ Your photo captured ({{ my_photo.captured_at.strftime('%d %b %H:%M') }})</div>
+    {% else %}
+    <p class="text-muted text-sm" style="margin-bottom:12px">Capture your identity photo with consent for agreement evidence. No facial recognition — consent-based only.</p>
+    <a href="{{ url_for('photo.capture_photo', agreement_id=req.agreement_id) }}" class="btn btn-primary btn-sm">📷 Capture My Photo</a>
+    {% endif %}
+    <div class="divider" style="margin:10px 0"></div>
+    <div style="display:flex;gap:16px">
+      <div style="font-size:12px">Landlord photo: <span class="badge {% if l_photo %}badge-success{% else %}badge-warning{% endif %}" style="font-size:10px">{% if l_photo %}✓ Captured{% else %}Pending{% endif %}</span></div>
+      <div style="font-size:12px">Tenant photo: <span class="badge {% if t_photo %}badge-success{% else %}badge-warning{% endif %}" style="font-size:10px">{% if t_photo %}✓ Captured{% else %}Pending{% endif %}</span></div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# STEP 5: Digital Sign #}
+  {% if req.agreement_id and doc_both %}
+  {% set already_signed = (current_user.id == req.landlord_id and agreement.landlord_signature) or (current_user.id == req.tenant_id and agreement.tenant_signature) %}
+  <div class="step-card {% if already_signed %}done{% else %}active{% endif %}">
+    <div class="step-card-title">
+      {% if already_signed %}✅{% else %}✍{% endif %}
+      Step 5 — Digital Sign (RSA-PSS / SHA-256)
+    </div>
+    {% if already_signed %}
+    <div style="color:var(--success);font-size:13px;font-weight:600">✓ You have digitally signed</div>
+    {% if not agreement.is_fully_signed %}<div class="text-muted text-sm">Waiting for other party to sign…</div>{% endif %}
+    {% else %}
+    <p class="text-muted text-sm" style="margin-bottom:12px">
+      Sign with your RSA-2048 private key. The SHA-256 document hash will be signed using RSA-PSS with SHA-256.
+      {% if current_user.id == req.tenant_id and agreement.landlord_signature %}
+      <br><strong>Landlord has already signed.</strong> You can now verify and sign.
+      {% elif current_user.id == req.tenant_id and not agreement.landlord_signature %}
+      <br>Waiting for landlord to sign first.
+      {% endif %}
+    </p>
+    {% if current_user.id == req.landlord_id or (current_user.id == req.tenant_id and agreement.landlord_signature) %}
+    <form id="signForm" method="POST" action="{{ url_for('req.sign_agreement', req_id=req.id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    <button type="button" class="btn btn-primary"
+            onclick="confirmAction('Sign this agreement with your RSA-2048 digital certificate? This action is cryptographically binding.','signForm')">
+      🔐 Sign with Digital Certificate
+    </button>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {# STEP 6: PDF #}
+  {% if agreement and agreement.is_fully_signed %}
+  <div class="step-card done">
+    <div class="step-card-title">✅ Step 6 — PDF Certificate Generated</div>
+    {% if gen_pdf %}
+    <div style="color:var(--success);font-size:13px;font-weight:600;margin-bottom:10px">✓ Certificate is ready for download</div>
+    <div style="display:flex;gap:8px">
+      <a href="{{ url_for('pdf.download_pdf', agreement_id=agreement.id) }}" class="btn btn-primary btn-sm">⬇ Download PDF</a>
+      <a href="{{ url_for('verification.verify_by_code', code=agreement.verification_code) }}" target="_blank" class="btn btn-outline btn-sm">🔍 Verify Online</a>
+    </div>
+    {% else %}
+    <div class="text-muted text-sm">PDF is being generated…</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+</div><!-- /left -->
+
+<!-- RIGHT: Encrypted Chat ──────────────────────────────────────── -->
+<div>
+  <div class="card pop-in pop-in-delay-2" style="overflow:hidden">
+    <div class="card-header" style="background:var(--black);color:var(--white);padding:14px 20px">
+      <div>
+        <div style="font-weight:700;font-size:15px">🔒 Encrypted Chat</div>
+        <div style="font-size:11px;opacity:.6">AES-256-GCM • Only visible to you and the other party</div>
+      </div>
+      {% if thread %}
+      <span style="font-size:10px;opacity:.5;margin-left:auto">Thread: {{ thread.thread_uid[:8] }}…</span>
+      {% endif %}
+    </div>
+
+    {% if thread %}
+    <div class="chat-wrap">
+      <div class="chat-messages" id="chatMessages">
+        {% for msg in messages %}
+        <div class="chat-msg {% if msg.is_system %}system-msg{% elif msg.is_mine %}mine{% else %}other{% endif %}">
+          <div class="bubble">{{ msg.text }}</div>
+          {% if not msg.is_system %}
+          <div class="msg-meta">{{ msg.sender_name }} &bull; {{ msg.sent_at.strftime('%d %b %H:%M') }}</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% if not messages %}
+        <div style="text-align:center;color:var(--grey-400);font-size:13px;padding:20px 0">
+          No messages yet. Start the conversation!
+        </div>
+        {% endif %}
+      </div>
+      <div class="chat-input">
+        <textarea id="chatText" placeholder="Type a message… (Enter to send)" rows="1"
+                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChatMsg();}"></textarea>
+        <button class="btn btn-primary btn-sm" onclick="sendChatMsg()">Send</button>
+      </div>
+    </div>
+    {% else %}
+    <div style="padding:32px;text-align:center;color:var(--grey-400)">
+      <div style="font-size:32px;margin-bottom:8px">🔒</div>
+      Chat opens once the landlord starts reviewing the request.
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Bilingual Agreement Preview (if generated) -->
+  {% if agreement %}
+  <div class="card pop-in pop-in-delay-3" style="margin-top:16px">
+    <div class="card-body">
+      <div class="section-title">Bilingual Agreement</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <span class="badge badge-info">English</span>
+        <span class="badge badge-success">नेपाली</span>
+      </div>
+      <div style="background:var(--grey-100);border-radius:var(--radius-sm);padding:12px;font-size:11px;font-family:monospace;max-height:200px;overflow-y:auto;line-height:1.6">
+        SHA-256: {{ agreement.document_hash_sha256 or 'N/A' }}<br>
+        Status: {{ agreement.status }}<br>
+        Landlord Sig: {% if agreement.landlord_signature %}✓ Signed{% else %}Pending{% endif %}<br>
+        Tenant Sig: {% if agreement.tenant_signature %}✓ Signed{% else %}Pending{% endif %}
+      </div>
+      <div style="margin-top:10px">
+        <a href="{{ url_for('agreement.view_agreement', agreement_id=agreement.id) }}" class="btn btn-outline btn-sm btn-full">
+          View Full Agreement Details →
+        </a>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div><!-- /right -->
+</div><!-- /grid-2 -->
+
+<script>
+const THREAD_ID = {{ thread.id if thread else 'null' }};
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+let lastMsgId = {{ messages[-1].id if messages else 0 }};
+
+function renderMsg(m) {
+  const cls = m.is_system ? 'system-msg' : (m.is_mine ? 'mine' : 'other');
+  const meta = m.is_system ? '' : `<div class="msg-meta">${m.sender_name} &bull; ${m.sent_at}</div>`;
+  return `<div class="chat-msg ${cls}"><div class="bubble">${escHtml(m.text)}</div>${meta}</div>`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function sendChatMsg() {
+  if (!THREAD_ID) return;
+  const ta = document.getElementById('chatText');
+  const text = ta.value.trim();
+  if (!text) return;
+  ta.value = '';
+  ta.style.height = 'auto';
+
+  try {
+    const r = await fetch(`/chat/thread/${THREAD_ID}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN },
+      body: JSON.stringify({ text }),
+    });
+    const d = await r.json();
+    if (d.success) {
+      appendMsg(d.message);
+      lastMsgId = d.message.id;
+    } else {
+      showToast(d.error || 'Send failed', 'error');
+    }
+  } catch (e) {
+    showToast('Network error', 'error');
+  }
+}
+
+function appendMsg(m) {
+  const box = document.getElementById('chatMessages');
+  if (!box) return;
+  box.insertAdjacentHTML('beforeend', renderMsg(m));
+  box.scrollTop = box.scrollHeight;
+}
+
+// Poll for new messages every 3 seconds
+async function pollMessages() {
+  if (!THREAD_ID) return;
+  try {
+    const r = await fetch(`/chat/thread/${THREAD_ID}/messages?since=${lastMsgId}`);
+    const d = await r.json();
+    if (d.messages && d.messages.length) {
+      d.messages.forEach(m => { appendMsg(m); lastMsgId = Math.max(lastMsgId, m.id); });
+    }
+  } catch {}
+}
+
+// Scroll to bottom on load
+window.addEventListener('DOMContentLoaded', () => {
+  const box = document.getElementById('chatMessages');
+  if (box) box.scrollTop = box.scrollHeight;
+  if (THREAD_ID) setInterval(pollMessages, 3000);
+});
+</script>
+{% endblock %}
