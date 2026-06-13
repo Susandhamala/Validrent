@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% block title %}Admin Panel{% endblock %}
-{% block page_title %}Admin Panel{% endblock %}
 
 {% block head %}
 <style>
@@ -53,18 +52,16 @@
 {% endblock %}
 
 {% block content %}
-<!-- Header -->
-<div class="page-header pop-in" style="margin-bottom:2rem">
-  <div class="page-header-left">
-    <h1 style="display:flex;align-items:center;gap:.5rem">
-      <span style="background:var(--black);color:#fff;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:700">ADMIN</span>
-      Control Panel
-    </h1>
-    <p style="color:var(--gray-500);margin:0">Logged in as {{ current_user.full_name }} — Full system access</p>
-  </div>
+<div class="pop-in" style="background:var(--black);color:#fff;border-radius:14px;padding:2rem 2.5rem;margin-bottom:2rem">
+  <div style="font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;opacity:.55;font-weight:600;margin-bottom:.35rem">Admin Control Panel</div>
+  <h1 style="margin:0;font-size:1.8rem;font-weight:900;line-height:1.1">
+    Welcome back, {{ current_user.full_name }} 👋
+  </h1>
+  <p style="margin:.5rem 0 0;opacity:.6;font-size:.9rem">
+    You have full system access &nbsp;·&nbsp; {{ current_user.email }}
+  </p>
 </div>
 
-<!-- Stats -->
 <div class="admin-stat-grid pop-in">
   <div class="admin-stat dark"><div class="n">{{ stats.users }}</div><div class="l">Total Users</div></div>
   <div class="admin-stat"><div class="n">{{ stats.landlords }}</div><div class="l">Landlords</div></div>
@@ -78,7 +75,6 @@
   <div class="admin-stat"><div class="n">{{ stats.photos }}</div><div class="l">Photos</div></div>
 </div>
 
-<!-- Quick nav -->
 <div class="admin-nav-grid pop-in">
   <a href="{{ url_for('admin.users') }}" class="admin-nav-card">
     <div class="admin-nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
@@ -106,7 +102,6 @@
   </a>
 </div>
 
-<!-- Recent users -->
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;flex-wrap:wrap" class="pop-in">
   <div class="card">
     <div class="card-header">

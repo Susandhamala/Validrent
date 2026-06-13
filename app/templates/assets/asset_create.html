@@ -15,7 +15,7 @@
 
 <div class="card pop-in pop-in-delay-1" style="max-width:700px">
   <div class="card-body">
-    <form method="POST" action="{{ url_for('asset.create_asset') }}">
+    <form method="POST" action="{{ url_for('asset.create_asset') }}" enctype="multipart/form-data">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
       <!-- CATEGORY SELECTION -->
@@ -76,10 +76,32 @@
                   placeholder="Describe the asset...">{{ form_data.get('description','') }}</textarea>
       </div>
 
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Asking Rent (NPR) *</label>
+          <input type="number" name="estimated_value" class="form-control"
+                 placeholder="e.g. 15000" min="0" step="500" value="{{ form_data.get('estimated_value','') }}" required>
+          <div class="form-hint">The price you charge tenants</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Rent Period *</label>
+          <select name="rent_period" class="form-control" required>
+            <option value="per_month"  {% if form_data.get('rent_period','per_month')=='per_month'  %}selected{% endif %}>Per Month</option>
+            <option value="per_day"    {% if form_data.get('rent_period')=='per_day'    %}selected{% endif %}>Per Day</option>
+            <option value="per_year"   {% if form_data.get('rent_period')=='per_year'   %}selected{% endif %}>Per Year</option>
+            <option value="fixed"      {% if form_data.get('rent_period')=='fixed'      %}selected{% endif %}>Fixed / One-Time</option>
+          </select>
+          <div class="form-hint">How tenants will be charged</div>
+        </div>
+      </div>
+
       <div class="form-group">
-        <label class="form-label">Estimated Value (NPR)</label>
-        <input type="number" name="estimated_value" class="form-control"
-               placeholder="0" min="0" step="1000" value="{{ form_data.get('estimated_value','') }}">
+        <label class="form-label">Asset Photo <span class="text-muted">(optional — JPG, PNG or WebP, max 5 MB)</span></label>
+        <input type="file" name="photo" id="assetPhoto" class="form-control"
+               accept="image/jpeg,image/png,image/webp"
+               onchange="document.getElementById('assetPhotoPreview').src=URL.createObjectURL(this.files[0]);document.getElementById('assetPhotoPreview').style.display='block'">
+        <img id="assetPhotoPreview" src="" alt="Preview"
+             style="display:none;margin-top:10px;max-height:180px;border-radius:8px;object-fit:cover">
       </div>
 
       <div class="divider"></div>

@@ -101,20 +101,21 @@
           </div>
         </div>
 
-        <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">{{ tr.label_password }}</label>
-            <input type="password" name="password" class="form-control"
-                   placeholder="Min 8 characters" required minlength="8">
-          </div>
-          <div class="form-group">
-            <label class="form-label">{{ tr.label_confirm_password }}</label>
-            <input type="password" name="confirm_password" class="form-control"
-                   placeholder="Repeat password" required>
-          </div>
+        <div class="form-group">
+          <label class="form-label">{{ tr.label_password }}</label>
+          <input type="password" name="password" id="regPassword" class="form-control"
+                 placeholder="e.g. MyR3nt@Nepal!" required>
+          <div id="pw-strength" style="margin-top:8px;padding:10px 12px;background:var(--gray-50);border-radius:8px;border:1px solid var(--gray-100)"></div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-full btn-lg">{{ tr.btn_create_account }}</button>
+        <div class="form-group">
+          <label class="form-label">{{ tr.label_confirm_password }}</label>
+          <input type="password" name="confirm_password" id="regConfirm" class="form-control"
+                 placeholder="Repeat password" required>
+          <div id="pw-match-error" style="display:none;color:#ef4444;font-size:.8rem;margin-top:4px">Passwords do not match.</div>
+        </div>
+
+        <button type="submit" id="regSubmit" class="btn btn-primary btn-full btn-lg" disabled>{{ tr.btn_create_account }}</button>
       </form>
 
       <div class="auth-footer-link">
@@ -129,5 +130,22 @@ function setRole(role, el) {
   el.classList.add('selected');
   el.querySelector('input[type=radio]').checked = true;
 }
+document.addEventListener('DOMContentLoaded', () => {
+  initPasswordStrength('regPassword', 'pw-strength', 'regSubmit');
+  const confirm = document.getElementById('regConfirm');
+  const pw = document.getElementById('regPassword');
+  const matchErr = document.getElementById('pw-match-error');
+  function checkMatch() {
+    if (confirm.value && confirm.value !== pw.value) {
+      matchErr.style.display = 'block';
+      confirm.setCustomValidity('Passwords do not match.');
+    } else {
+      matchErr.style.display = 'none';
+      confirm.setCustomValidity('');
+    }
+  }
+  confirm.addEventListener('input', checkMatch);
+  pw.addEventListener('input', checkMatch);
+});
 </script>
 {% endblock %}

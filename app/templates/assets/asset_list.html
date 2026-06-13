@@ -19,7 +19,10 @@
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
         <div>
           <div style="font-size:22px;margin-bottom:4px">
-            {% if a.category %}
+            {% if a.photo_path %}
+            <img src="{{ url_for('asset.asset_photo', asset_id=a.id) }}" alt="{{ a.asset_title }}"
+                 style="width:60px;height:60px;object-fit:cover;border-radius:8px">
+            {% elif a.category %}
               {% if a.category.icon == 'home' %}🏠
               {% elif a.category.icon == 'door-open' %}🚪
               {% elif a.category.icon == 'building' %}🏢
@@ -47,12 +50,21 @@
       <div class="text-muted text-sm" style="margin-bottom:6px">🔖 {{ a.asset_identifier }}</div>
       {% endif %}
       {% if a.estimated_value %}
-      <div style="font-size:16px;font-weight:700;margin-bottom:12px">NPR {{ '{:,.0f}'.format(a.estimated_value) }}</div>
+      <div style="font-size:16px;font-weight:700;margin-bottom:4px">
+        NPR {{ '{:,.0f}'.format(a.estimated_value) }}
+        <span style="font-size:12px;font-weight:400;color:var(--grey-500)">{{ a.rent_period_label }}</span>
+      </div>
       {% endif %}
 
-      <div style="display:flex;gap:8px">
-        <a href="{{ url_for('asset.view_asset', asset_id=a.id) }}" class="btn btn-sm btn-outline">View Details</a>
-        <a href="{{ url_for('agreement.create_agreement') }}?asset_id={{ a.id }}" class="btn btn-sm btn-primary">Create Agreement</a>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <a href="{{ url_for('asset.view_asset', asset_id=a.id) }}" class="btn btn-sm btn-outline">View</a>
+        <a href="{{ url_for('asset.edit_asset', asset_id=a.id) }}" class="btn btn-sm btn-ghost">Edit</a>
+        <a href="{{ url_for('agreement.create_agreement') }}?asset_id={{ a.id }}" class="btn btn-sm btn-primary">Agreement</a>
+        <form method="POST" action="{{ url_for('asset.delete_asset', asset_id=a.id) }}" style="margin:0"
+              onsubmit="return confirm('Delete \'{{ a.asset_title|e }}\' permanently? This cannot be undone.')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm" style="background:#fee2e2;color:#dc2626;border:1px solid #fca5a5">Delete</button>
+        </form>
       </div>
     </div>
   </div>

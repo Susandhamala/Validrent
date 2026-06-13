@@ -28,7 +28,12 @@
     <div style="text-align:right">
       <div style="font-size:11px;color:var(--grey-500)">Listed by</div>
       <div style="font-weight:700">{{ asset.owner.full_name }}</div>
-      <div class="text-muted text-sm">{{ asset.owner.email }}</div>
+      {% if asset.estimated_value %}
+      <div style="font-size:15px;font-weight:800;color:var(--black);margin-top:4px">
+        NPR {{ '{:,.0f}'.format(asset.estimated_value) }}
+        <span style="font-size:11px;font-weight:500;color:var(--grey-500)">{{ asset.rent_period_label }}</span>
+      </div>
+      {% endif %}
     </div>
   </div>
 </div>
@@ -56,21 +61,35 @@
       <div class="form-grid">
         <div class="form-group">
           <label class="form-label">Proposed Start Date</label>
-          <input type="date" name="start_date" class="form-control" required>
+          <input type="date" name="start_date" id="req_start_date" class="form-control" required>
         </div>
         <div class="form-group">
           <label class="form-label">Proposed End Date</label>
-          <input type="date" name="end_date" class="form-control">
+          <input type="date" name="end_date" id="req_end_date" class="form-control">
+          <div id="date-error" style="display:none;color:#ef4444;font-size:.8rem;margin-top:4px"></div>
         </div>
       </div>
 
       <div class="form-grid">
         <div class="form-group">
-          <label class="form-label">Your Offered Rent</label>
+          <label class="form-label">
+            Your Offered Rent
+            {% if asset.estimated_value %}
+            <span style="font-weight:400;color:var(--grey-500);font-size:12px">
+              — Landlord asks NPR {{ '{:,.0f}'.format(asset.estimated_value) }} {{ asset.rent_period_label }}
+            </span>
+            {% endif %}
+          </label>
           <input type="number" name="proposed_rent" class="form-control"
                  placeholder="Amount you offer to pay" min="0" step="100"
                  {% if asset.estimated_value %}value="{{ asset.estimated_value|int }}"{% endif %}>
-          <div class="form-hint">Landlord may counter-offer during negotiation</div>
+          <div class="form-hint">
+            {% if asset.rent_period == 'per_month' %}Amount per month.
+            {% elif asset.rent_period == 'per_day' %}Amount per day.
+            {% elif asset.rent_period == 'per_year' %}Amount per year.
+            {% else %}Fixed / one-time amount.{% endif %}
+            Landlord may counter-offer during negotiation.
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Currency</label>
@@ -103,4 +122,9 @@
     </form>
   </div>
 </div>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  initDateRangeValidation('req_start_date', 'req_end_date', 'date-error');
+});
+</script>
 {% endblock %}

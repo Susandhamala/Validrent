@@ -127,12 +127,19 @@
   <div class="asset-card pop-in" style="animation-delay:{{ loop.index0 * 0.05 }}s">
     <div class="asset-card-top">
       <div class="asset-emoji">
-        {% if asset.category %}
+        {% if asset.photo_path %}
+        <img src="{{ url_for('asset.asset_photo', asset_id=asset.id) }}" alt="{{ asset.asset_title }}"
+             style="width:60px;height:60px;object-fit:cover;border-radius:8px">
+        {% elif asset.category %}
           {% if asset.category.icon == 'home' %}🏠{% elif asset.category.icon == 'door-open' %}🚪{% elif asset.category.icon == 'building' %}🏢{% elif asset.category.icon == 'map' %}🗺️{% elif asset.category.icon == 'car' %}🚗{% elif asset.category.icon == 'bicycle' %}🛵{% elif asset.category.icon == 'gear' %}⚙️{% elif asset.category.icon == 'briefcase' %}💼{% elif asset.category.icon == 'box' %}📦{% else %}🏷️{% endif %}
         {% else %}🏷️{% endif %}
       </div>
       <div>
+        {% if asset.status == 'rented' %}
+        <span class="badge badge-danger" style="font-size:10px">Rented</span>
+        {% else %}
         <span class="badge badge-success" style="font-size:10px">{{ tr.status_available }}</span>
+        {% endif %}
         <div class="text-muted text-sm" style="margin-top:4px">
           {{ asset.category.name if asset.category else 'General' }}
         </div>
@@ -170,14 +177,21 @@
       </div>
 
       {% if asset.estimated_value %}
-      <div class="asset-card-price">NPR {{ '{:,.0f}'.format(asset.estimated_value) }}</div>
+      <div class="asset-card-price">
+        NPR {{ '{:,.0f}'.format(asset.estimated_value) }}
+        <span style="font-size:12px;font-weight:400;color:var(--grey-500)">{{ asset.rent_period_label }}</span>
+      </div>
       {% endif %}
 
       <div class="asset-card-footer">
         <a href="{{ url_for('asset.view_asset', asset_id=asset.id) }}" class="btn btn-outline btn-sm" style="flex:1">
           {{ tr.btn_view }}
         </a>
-        {% if current_user.role == 'tenant' %}
+        {% if asset.owner_id == current_user.id %}
+        <span class="btn btn-ghost btn-sm" style="flex:1;cursor:default;opacity:.6">Your Listing</span>
+        {% elif asset.status == 'rented' %}
+        <span class="btn btn-ghost btn-sm" style="flex:1;cursor:default;opacity:.5">Currently Rented</span>
+        {% elif current_user.has_role('tenant') %}
         <a href="{{ url_for('req.create_request', asset_id=asset.id) }}" class="btn btn-primary btn-sm" style="flex:1">
           {{ tr.btn_request }}
         </a>

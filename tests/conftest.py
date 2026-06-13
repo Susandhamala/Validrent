@@ -17,6 +17,7 @@ class TestConfig(Config):
     PDFS_DIR = '/tmp/vr_test/pdfs'
     QR_DIR = '/tmp/vr_test/qr'
     PHOTOS_DIR = '/tmp/vr_test/photos'
+    ASSET_PHOTOS_DIR = '/tmp/vr_test/asset_photos'
     BASE_URL = 'http://localhost'
 
 
@@ -51,7 +52,7 @@ def client(app):
 
 # ── Helpers ────────────────────────────────────────────────────────────────
 
-def _register(client, email, role, name='Test User', password='password123'):
+def _register(client, email, role, name='Test User', password='ValidR3nt!'):
     return client.post('/auth/register', data={
         'full_name': name,
         'email': email,
@@ -62,7 +63,7 @@ def _register(client, email, role, name='Test User', password='password123'):
     }, follow_redirects=True)
 
 
-def _login(client, email, password='password123'):
+def _login(client, email, password='ValidR3nt!'):
     return client.post('/auth/login', data={
         'email': email, 'password': password,
     }, follow_redirects=True)

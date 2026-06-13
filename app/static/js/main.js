@@ -187,6 +187,124 @@ function initScrollAnimations() {
   });
 }
 
+/* ── PASSWORD STRENGTH ──────────────────────────────────────── */
+function initPasswordStrength(inputId, indicatorId, submitId) {
+  const input = document.getElementById(inputId);
+  const indicator = document.getElementById(indicatorId);
+  const submit = document.getElementById(submitId);
+  if (!input || !indicator) return;
+
+  const rules = [
+    { id: 'pw-len',     label: 'At least 8 characters',        test: v => v.length >= 8 },
+    { id: 'pw-upper',   label: 'One uppercase letter (A-Z)',    test: v => /[A-Z]/.test(v) },
+    { id: 'pw-lower',   label: 'One lowercase letter (a-z)',    test: v => /[a-z]/.test(v) },
+    { id: 'pw-digit',   label: 'One number (0-9)',              test: v => /\d/.test(v) },
+    { id: 'pw-special', label: 'One special character (!@#$%)', test: v => /[!@#$%^&*()\-_=+\[\]{};:'"\\|,.<>/?]/.test(v) },
+  ];
+
+  indicator.innerHTML = rules.map(r =>
+    `<div id="${r.id}" style="font-size:.78rem;color:var(--gray-400);margin:2px 0;display:flex;align-items:center;gap:6px">
+       <span class="pw-check">✗</span> ${r.label}
+     </div>`
+  ).join('');
+
+  function update() {
+    const val = input.value;
+    let passed = 0;
+    rules.forEach(r => {
+      const ok = r.test(val);
+      const el = document.getElementById(r.id);
+      if (!el) return;
+      el.style.color = ok ? '#22c55e' : 'var(--gray-400)';
+      el.querySelector('.pw-check').textContent = ok ? '✓' : '✗';
+      if (ok) passed++;
+    });
+    if (submit) submit.disabled = passed < rules.length;
+  }
+
+  input.addEventListener('input', update);
+  update();
+}
+
+/* ── DATE RANGE VALIDATION ──────────────────────────────────── */
+function initDateRangeValidation(startId, endId, errorId) {
+  const startEl = document.getElementById(startId);
+  const endEl = document.getElementById(endId);
+  const errorEl = document.getElementById(errorId);
+  if (!startEl || !endEl) return;
+
+  const today = new Date().toISOString().split('T')[0];
+  startEl.min = today;
+
+  function validate() {
+    const s = startEl.value;
+    const e = endEl.value;
+    if (s) {
+      const nextDay = new Date(s);
+      nextDay.setDate(nextDay.getDate() + 1);
+      endEl.min = nextDay.toISOString().split('T')[0];
+    }
+    if (s && e && e <= s) {
+      if (errorEl) { errorEl.textContent = 'End date must be after start date.'; errorEl.style.display = 'block'; }
+      endEl.setCustomValidity('End date must be after start date.');
+    } else {
+      if (errorEl) errorEl.style.display = 'none';
+      endEl.setCustomValidity('');
+    }
+    const sDate = new Date(s);
+    const todayDate = new Date(today);
+    if (s && sDate < todayDate) {
+      if (errorEl) { errorEl.textContent = 'Start date cannot be in the past.'; errorEl.style.display = 'block'; }
+      startEl.setCustomValidity('Start date cannot be in the past.');
+    } else {
+      startEl.setCustomValidity('');
+    }
+  }
+
+  startEl.addEventListener('change', validate);
+  endEl.addEventListener('change', validate);
+  validate();
+}
+
+/* ── REQUEST STATUS POLLING ─────────────────────────────────── */
+function initRequestStatusPolling(reqId, intervalMs) {
+  const badge = document.getElementById('req-status-badge');
+  const workflowTracker = document.getElementById('workflow-tracker');
+  if (!badge) return;
+
+  let lastStatus = badge.dataset.status || '';
+
+  setInterval(async () => {
+    try {
+      const res = await fetch(`/requests/${reqId}/status`);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      if (data.status !== lastStatus) {
+        lastStatus = data.status;
+        badge.textContent = data.status_label;
+        badge.className = 'badge ' + _statusBadgeClass(data.status);
+        // Reload page for major transitions to reveal new action cards
+        if (['approved', 'agreement_created', 'fully_signed'].includes(data.status)) {
+          window.location.reload();
+        }
+      }
+    } catch (_) {}
+  }, intervalMs || 5000);
+}
+
+function _statusBadgeClass(status) {
+  const map = {
+    pending: 'badge-warning',
+    under_review: 'badge-info',
+    negotiating: 'badge-info',
+    approved: 'badge-success',
+    rejected: 'badge-danger',
+    agreement_created: 'badge-success',
+  };
+  return map[status] || 'badge-info';
+}
+
 /* ── INIT ───────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   initScrollAnimations();

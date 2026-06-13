@@ -12,7 +12,9 @@
   </div>
   <div class="page-header-actions">
     <a href="{{ url_for('agreement.list_agreements') }}" class="btn btn-outline">← Back</a>
+
     {% if agreement.is_fully_signed %}
+      {# PDF actions #}
       {% if agreement.final_pdf_status == 'generated' %}
       <a href="{{ url_for('pdf.view_certificate', agreement_id=agreement.id) }}" class="btn btn-outline">📄 View Certificate</a>
       <a href="{{ url_for('pdf.download_pdf', agreement_id=agreement.id) }}" class="btn btn-primary">⬇ Download PDF</a>
@@ -22,9 +24,52 @@
         <button type="submit" class="btn btn-success">Generate Certificate PDF</button>
       </form>
       {% endif %}
+
+      {# Mutual deletion — fully signed agreements #}
+      {% set i_requested = (current_user.id == agreement.landlord_id and agreement.landlord_delete_requested)
+                        or (current_user.id == agreement.tenant_id   and agreement.tenant_delete_requested) %}
+      {% if i_requested %}
+      <span class="btn btn-ghost" style="opacity:.6;cursor:default;font-size:13px">
+        ⏳ Awaiting other party's consent to delete
+      </span>
+      {% else %}
+      <form id="reqDelForm" method="POST"
+            action="{{ url_for('agreement.request_delete_agreement', agreement_id=agreement.id) }}"
+            style="display:none">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      </form>
+      <button type="button" class="btn btn-ghost" style="color:#dc2626;border-color:#dc2626"
+              onclick="confirmAction('Request mutual deletion of this fully-signed agreement?\n\nBoth parties must agree before it is permanently deleted.','reqDelForm')">
+        🗑 Request Deletion
+      </button>
+      {% endif %}
+
+    {% else %}
+      {# Direct delete — not fully signed #}
+      <form id="delForm" method="POST"
+            action="{{ url_for('agreement.delete_agreement', agreement_id=agreement.id) }}"
+            style="display:none">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      </form>
+      <button type="button" class="btn btn-ghost" style="color:#dc2626;border-color:#dc2626"
+              onclick="confirmAction('Permanently delete this agreement?\n\nThis cannot be undone.','delForm')">
+        🗑 Delete Agreement
+      </button>
     {% endif %}
   </div>
 </div>
+
+{% if agreement.is_fully_signed %}
+  {% set other_requested = (current_user.id == agreement.tenant_id   and agreement.landlord_delete_requested)
+                        or (current_user.id == agreement.landlord_id and agreement.tenant_delete_requested) %}
+  {% if other_requested %}
+  <div class="info-box pop-in" style="background:#fef3c7;border-left:4px solid #f59e0b;margin-bottom:16px">
+    <strong>⚠ Deletion Requested</strong><br>
+    The other party has requested to delete this agreement.
+    Click <strong>Request Deletion</strong> above if you also agree — the agreement will be permanently removed.
+  </div>
+  {% endif %}
+{% endif %}
 
 <!-- STATUS BAR -->
 <div class="steps pop-in pop-in-delay-1">
@@ -110,7 +155,7 @@
   </div>
 </div>
 
-<!-- INTEGRITY -->
+<!-- INTEGRITY + DOCUMENT -->
 <div class="card pop-in pop-in-delay-3 mb-4">
   <div class="card-body">
     <div class="section-title">Document Integrity</div>
@@ -118,6 +163,18 @@
       <div class="text-muted text-sm" style="margin-bottom:4px">SHA-256 Hash</div>
       <div class="cert-hash">{{ agreement.document_hash_sha256 or 'N/A' }}</div>
     </div>
+    {% if agreement.shared_file_path %}
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--grey-200)">
+      <div class="text-muted text-sm" style="margin-bottom:6px">Uploaded Document</div>
+      <a href="{{ url_for('agreement.view_document', agreement_id=agreement.id) }}"
+         target="_blank" class="btn btn-outline btn-sm">
+        📄 View / Download Document — {{ agreement.original_filename }}
+      </a>
+      <div class="form-hint" style="margin-top:6px">
+        The document is shared with both landlord and tenant. The SHA-256 hash above verifies its integrity.
+      </div>
+    </div>
+    {% endif %}
   </div>
 </div>
 
@@ -129,19 +186,34 @@
       <div class="section-title">Landlord Signature</div>
       {% if agreement.landlord_signature %}
       <span class="badge badge-success">✓ Signed</span>
-      <div class="text-muted text-sm" style="margin-top:6px">{{ agreement.landlord_signed_at.strftime('%d %b %Y %H:%M') if agreement.landlord_signed_at else '' }}</div>
-      <div class="cert-hash" style="margin-top:8px;font-size:10px">{{ agreement.landlord_signature[:80] }}...</div>
+      <div class="text-muted text-sm" style="margin-top:6px">
+        {{ agreement.landlord_signed_at.strftime('%d %b %Y %H:%M') if agreement.landlord_signed_at else '' }}
+      </div>
+      {% if agreement.landlord_remarks %}
+      <div style="margin-top:8px;padding:8px;background:var(--grey-100);border-radius:6px;font-size:12px">
+        <span class="text-muted" style="font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.05em">Landlord Remarks</span>
+        <div style="margin-top:4px">{{ agreement.landlord_remarks }}</div>
+      </div>
+      {% endif %}
+      <div style="margin-top:8px">
+        <div class="text-muted" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">RSA-2048 Signature</div>
+        <div class="cert-hash" style="font-size:9px;word-break:break-all;line-height:1.4">{{ agreement.landlord_signature }}</div>
+      </div>
       {% elif current_user.id == agreement.landlord_id %}
-      <p class="text-muted" style="font-size:13px;margin-bottom:16px">You have not signed this agreement yet.</p>
-      <form method="POST" action="{{ url_for('agreement.sign_agreement', agreement_id=agreement.id) }}">
+      <p class="text-muted" style="font-size:13px;margin-bottom:12px">You have not signed this agreement yet.</p>
+      <form id="signFormL" method="POST" action="{{ url_for('agreement.sign_agreement', agreement_id=agreement.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group" style="margin-bottom:12px">
+          <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--grey-600);display:block;margin-bottom:4px">
+            Your Remarks (optional)
+          </label>
+          <textarea name="remarks" class="form-control" rows="3"
+                    placeholder="Add any remarks or conditions before signing — these will appear in the legal document and PDF..."></textarea>
+        </div>
         <button type="button" class="btn btn-primary"
                 onclick="confirmAction('Sign this agreement with your RSA-2048 private key?','signFormL')">
           ✍ Sign as Landlord
         </button>
-        <form id="signFormL" method="POST" action="{{ url_for('agreement.sign_agreement', agreement_id=agreement.id) }}" style="display:none">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        </form>
       </form>
       {% else %}
       <span class="badge badge-warning">Pending</span>
@@ -155,24 +227,70 @@
       <div class="section-title">Tenant Signature</div>
       {% if agreement.tenant_signature %}
       <span class="badge badge-success">✓ Signed</span>
-      <div class="text-muted text-sm" style="margin-top:6px">{{ agreement.tenant_signed_at.strftime('%d %b %Y %H:%M') if agreement.tenant_signed_at else '' }}</div>
-      <div class="cert-hash" style="margin-top:8px;font-size:10px">{{ agreement.tenant_signature[:80] }}...</div>
+      <div class="text-muted text-sm" style="margin-top:6px">
+        {{ agreement.tenant_signed_at.strftime('%d %b %Y %H:%M') if agreement.tenant_signed_at else '' }}
+      </div>
+      {% if agreement.tenant_remarks %}
+      <div style="margin-top:8px;padding:8px;background:var(--grey-100);border-radius:6px;font-size:12px">
+        <span class="text-muted" style="font-weight:700;text-transform:uppercase;font-size:10px;letter-spacing:.05em">Tenant Remarks</span>
+        <div style="margin-top:4px">{{ agreement.tenant_remarks }}</div>
+      </div>
+      {% endif %}
+      <div style="margin-top:8px">
+        <div class="text-muted" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">RSA-2048 Signature</div>
+        <div class="cert-hash" style="font-size:9px;word-break:break-all;line-height:1.4">{{ agreement.tenant_signature }}</div>
+      </div>
       {% elif current_user.id == agreement.tenant_id %}
-      <p class="text-muted" style="font-size:13px;margin-bottom:8px">
-        {% if not agreement.landlord_signature %}
-        The landlord must sign first.
-        {% else %}
-        The landlord has signed. You can now verify and sign.
+      {% if linked_req and linked_req.status == 'pending' %}
+        {# Landlord created directly — tenant must accept first #}
+        <div style="padding:12px;background:#fef3c7;border-radius:8px;border-left:4px solid #f59e0b;margin-bottom:12px">
+          <div style="font-weight:700;font-size:13px;margin-bottom:4px">⚠ Review Required</div>
+          <div style="font-size:13px;color:#92400e">
+            The landlord has sent this agreement for your review. You must accept or reject it before signing.
+          </div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <form method="POST" action="{{ url_for('req.accept_direct_agreement', req_id=linked_req.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-success">✓ Accept &amp; Proceed to Sign</button>
+          </form>
+          <form id="rejectDirect{{ agreement.id }}" method="POST"
+                action="{{ url_for('req.reject_direct_agreement', req_id=linked_req.id) }}"
+                style="display:none">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          </form>
+          <button type="button" class="btn btn-danger btn-sm"
+                  onclick="confirmAction('Reject and cancel this agreement?','rejectDirect{{ agreement.id }}')">
+            ✗ Reject
+          </button>
+        </div>
+      {% elif linked_req and linked_req.status == 'rejected' %}
+        <span class="badge badge-danger">You rejected this agreement</span>
+        <div class="text-muted text-sm" style="margin-top:6px">Agreement is cancelled.</div>
+      {% else %}
+        <p class="text-muted" style="font-size:13px;margin-bottom:8px">
+          {% if not agreement.landlord_signature %}
+          The landlord must sign first.
+          {% else %}
+          The landlord has signed. You can now verify and sign.
+          {% endif %}
+        </p>
+        {% if agreement.landlord_signature %}
+        <form id="signFormT" method="POST" action="{{ url_for('agreement.sign_agreement', agreement_id=agreement.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="form-group" style="margin-bottom:12px">
+            <label style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--grey-600);display:block;margin-bottom:4px">
+              Your Remarks (optional)
+            </label>
+            <textarea name="remarks" class="form-control" rows="3"
+                      placeholder="Add any remarks before signing — these will appear in the legal document and PDF..."></textarea>
+          </div>
+          <button type="button" class="btn btn-primary"
+                  onclick="confirmAction('Verify landlord signature and sign this agreement?','signFormT')">
+            ✍ Verify &amp; Sign as Tenant
+          </button>
+        </form>
         {% endif %}
-      </p>
-      {% if agreement.landlord_signature %}
-      <form id="signFormT" method="POST" action="{{ url_for('agreement.sign_agreement', agreement_id=agreement.id) }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      </form>
-      <button type="button" class="btn btn-primary"
-              onclick="confirmAction('Verify landlord signature and sign this agreement?','signFormT')">
-        ✍ Verify &amp; Sign as Tenant
-      </button>
       {% endif %}
       {% else %}
       <span class="badge badge-warning">Pending</span>

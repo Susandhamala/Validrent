@@ -5,12 +5,10 @@
 {% block content %}
 <div class="page-header pop-in">
   <div class="page-header-left">
-    <h1>{% if current_user.role == 'tenant' %}My Requests{% else %}Incoming Requests{% endif %}</h1>
-    <p>{% if current_user.role == 'tenant' %}Requests you have sent to landlords{% else %}Rental requests from tenants{% endif %}</p>
+    <h1>Rental Requests</h1>
+    <p>All requests you have sent or received</p>
   </div>
-  {% if current_user.role == 'tenant' %}
   <a href="{{ url_for('asset.browse') }}" class="btn btn-primary">🔍 Browse Assets</a>
-  {% endif %}
 </div>
 
 {% set status_colors = {
@@ -42,10 +40,21 @@
         </div>
         <div class="text-muted text-sm">
           {{ r.rental_category }} &bull;
-          {% if current_user.role == 'landlord' %}
+          {% if r.initiated_by_landlord %}
+            {# Landlord created this directly for tenant review #}
+            {% if current_user.id == r.tenant_id %}
+              <span style="background:#fef3c7;border:1px solid #f59e0b;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;color:#92400e">RECEIVED</span>
+              From landlord: {{ r.landlord.full_name }}
+            {% else %}
+              <span style="background:#e8f4e8;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700">SENT</span>
+              To tenant: {{ r.tenant.full_name }}
+            {% endif %}
+          {% elif r.landlord_id == current_user.id %}
+            <span style="background:#f0f0f0;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700">RECEIVED</span>
             From: {{ r.tenant.full_name }} ({{ r.tenant.email }})
           {% else %}
-            Landlord: {{ r.landlord.full_name }}
+            <span style="background:#e8f4e8;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700">SENT</span>
+            To: {{ r.landlord.full_name }}
           {% endif %}
         </div>
         <div class="text-muted text-sm">
@@ -68,10 +77,29 @@
       </div>
 
       <!-- Actions -->
-      <div style="flex-shrink:0">
+      <div style="flex-shrink:0;display:flex;gap:8px;align-items:center">
         <a href="{{ url_for('req.view_request', req_id=r.id) }}" class="btn btn-primary btn-sm">
-          {% if r.status in ('pending',) and current_user.role == 'landlord' %}Review →{% else %}View →{% endif %}
+          {% if r.status == 'pending' and r.initiated_by_landlord and current_user.id == r.tenant_id %}
+            Respond →
+          {% elif r.status == 'pending' and r.landlord_id == current_user.id %}
+            Review →
+          {% else %}
+            View →
+          {% endif %}
         </a>
+        {# Delete button — block only when the linked agreement is fully signed #}
+        {% set can_delete = not (r.agreement and r.agreement.is_fully_signed) %}
+        {% if can_delete %}
+        <form method="POST" action="{{ url_for('req.delete_request', req_id=r.id) }}"
+              style="display:inline"
+              onsubmit="return confirm('Delete this request permanently?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm"
+                  style="background:transparent;color:#dc2626;border:1px solid #dc2626;padding:3px 8px">
+            Delete
+          </button>
+        </form>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -83,11 +111,7 @@
     <div style="font-size:48px;margin-bottom:16px">📋</div>
     <div style="font-size:20px;font-weight:700;margin-bottom:8px">No requests yet</div>
     <div class="text-muted" style="margin-bottom:24px">
-      {% if current_user.role == 'tenant' %}
       <a href="{{ url_for('asset.browse') }}" style="color:var(--black)">Browse available assets and send a rental request →</a>
-      {% else %}
-      No tenants have sent requests yet. Make sure your assets are listed as Available.
-      {% endif %}
     </div>
   </div>
 </div>

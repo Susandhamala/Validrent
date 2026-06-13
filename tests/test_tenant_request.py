@@ -87,6 +87,48 @@ class TestTenantRequest:
         # Dashboard should show pending requests alert
         assert b'request' in r.data.lower()
 
+    def test_end_date_before_start_date_rejected(self, client, app):
+        asset_id = _setup_both(client, app)
+        _login(client, 't@test.com')
+        r = client.post(f'/requests/new/{asset_id}', data={
+            'rental_category': 'House',
+            'start_date': '2027-06-01',
+            'end_date': '2027-05-01',
+            'proposed_rent': '12000',
+            'currency': 'NPR',
+            'tenant_message': 'Test',
+        }, follow_redirects=True)
+        assert r.status_code == 200
+        assert b'End date' in r.data or b'end date' in r.data or b'later than' in r.data
+
+    def test_end_date_equal_start_date_rejected(self, client, app):
+        asset_id = _setup_both(client, app)
+        _login(client, 't@test.com')
+        r = client.post(f'/requests/new/{asset_id}', data={
+            'rental_category': 'House',
+            'start_date': '2027-06-01',
+            'end_date': '2027-06-01',
+            'proposed_rent': '12000',
+            'currency': 'NPR',
+            'tenant_message': 'Test',
+        }, follow_redirects=True)
+        assert r.status_code == 200
+        assert b'End date' in r.data or b'end date' in r.data or b'later than' in r.data
+
+    def test_start_date_in_past_rejected(self, client, app):
+        asset_id = _setup_both(client, app)
+        _login(client, 't@test.com')
+        r = client.post(f'/requests/new/{asset_id}', data={
+            'rental_category': 'House',
+            'start_date': '2020-01-01',
+            'end_date': '2021-01-01',
+            'proposed_rent': '12000',
+            'currency': 'NPR',
+            'tenant_message': 'Test',
+        }, follow_redirects=True)
+        assert r.status_code == 200
+        assert b'past' in r.data or b'Start date' in r.data
+
     def test_landlord_approve_terms_triggers_agreement_creation(self, client, app):
         asset_id = _setup_both(client, app)
 

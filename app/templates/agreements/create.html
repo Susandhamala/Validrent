@@ -108,7 +108,7 @@
 
       <!-- FILE UPLOAD -->
       <div class="form-group">
-        <label class="form-label">Upload Agreement Document *</label>
+        <label class="form-label">Upload Agreement Document <span class="text-muted" style="font-weight:400;font-size:12px">(optional)</span></label>
         <div style="border:2px dashed var(--grey-300);border-radius:var(--radius);padding:28px;text-align:center;cursor:pointer;transition:border-color .2s"
              onclick="document.getElementById('agreementFile').click()"
              ondragover="event.preventDefault();this.style.borderColor='var(--black)'"
@@ -116,11 +116,11 @@
              ondrop="handleDrop(event)">
           <div style="font-size:28px;margin-bottom:8px">📄</div>
           <div style="font-weight:600" id="fileLabel">Click to upload or drag &amp; drop</div>
-          <div class="text-muted text-sm">PDF, DOC, DOCX, TXT — Max 16MB</div>
+          <div class="text-muted text-sm">PDF, DOC, DOCX, TXT — Max 16MB &mdash; skip to use terms text only</div>
           <input type="file" name="agreement_file" id="agreementFile" accept=".pdf,.doc,.docx,.txt"
-                 style="display:none" required onchange="updateFileLabel(this)">
+                 style="display:none" onchange="updateFileLabel(this)">
         </div>
-        <div class="form-hint">The file will be encrypted with AES-256-GCM before storage. SHA-256 hash will be computed for integrity.</div>
+        <div class="form-hint">If uploaded, the file is encrypted with AES-256-GCM and a readable copy is shared with the tenant. If skipped, the SHA-256 hash is computed from the agreement terms.</div>
       </div>
 
       <div class="info-box" style="margin-bottom:20px">

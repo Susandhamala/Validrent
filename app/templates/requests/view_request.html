@@ -93,17 +93,30 @@
     <div class="card-body">
       <div class="section-title">Request Details</div>
       <div style="display:grid;gap:10px">
+
+        {# Status row — rendered first with real badge markup #}
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--grey-100)">
+          <span class="text-muted text-sm">Status</span>
+          {% set _bc = 'badge-warning' if req.status == 'pending'
+                  else 'badge-success' if req.status in ('approved', 'agreement_created', 'fully_signed')
+                  else 'badge-danger'  if req.status == 'rejected'
+                  else 'badge-info' %}
+          <span id="req-status-badge" class="badge {{ _bc }}" data-status="{{ req.status }}">
+            {{ req.status_label }}
+          </span>
+        </div>
+
+        {# All other plain-text rows #}
         {% set details = [
-          ('Category', req.rental_category),
-          ('Asset', req.asset.asset_title if req.asset else 'N/A'),
-          ('Location', req.asset.location if req.asset else 'N/A'),
+          ('Category',      req.rental_category),
+          ('Asset',         req.asset.asset_title if req.asset else 'N/A'),
+          ('Location',      req.asset.location if req.asset else 'N/A'),
           ('Proposed Rent', req.currency ~ ' ' ~ '{:,.0f}'.format(req.proposed_rent or 0)),
-          ('Counter Rent', req.currency ~ ' ' ~ '{:,.0f}'.format(req.landlord_counter_rent or 0) if req.landlord_counter_rent else None),
-          ('Effective Rent', req.currency ~ ' ' ~ '{:,.0f}'.format(req.effective_rent or 0)),
-          ('Start Date', req.proposed_start_date|string if req.proposed_start_date else 'TBD'),
-          ('End Date', req.proposed_end_date|string if req.proposed_end_date else 'TBD'),
-          ('Status', req.status_label),
-          ('Created', req.created_at.strftime('%d %b %Y %H:%M')),
+          ('Counter Rent',  req.currency ~ ' ' ~ '{:,.0f}'.format(req.landlord_counter_rent) if req.landlord_counter_rent else None),
+          ('Effective Rent',req.currency ~ ' ' ~ '{:,.0f}'.format(req.effective_rent or 0)),
+          ('Start Date',    req.proposed_start_date | string if req.proposed_start_date else 'TBD'),
+          ('End Date',      req.proposed_end_date   | string if req.proposed_end_date   else 'TBD'),
+          ('Created',       req.created_at.strftime('%d %b %Y %H:%M')),
         ] %}
         {% for label, val in details %}
         {% if val %}
@@ -113,6 +126,7 @@
         </div>
         {% endif %}
         {% endfor %}
+
       </div>
     </div>
   </div>
@@ -138,8 +152,47 @@
 
   <!-- ── STEP-BY-STEP ACTIONS ────────────────────────────────── -->
 
-  {# STEP 1: Landlord reviews #}
-  {% if current_user.id == req.landlord_id and req.status == 'pending' %}
+  {# STEP 1a: Tenant accepts/rejects landlord-initiated direct agreement #}
+  {% if req.initiated_by_landlord and current_user.id == req.tenant_id and req.status == 'pending' %}
+  <div class="step-card active">
+    <div class="step-card-title">📋 Step 1 — Review &amp; Respond to Agreement</div>
+    <p class="text-muted text-sm" style="margin-bottom:6px">
+      The landlord has created an agreement directly for you. Review the details and accept or reject it.
+    </p>
+    {% if req.agreement_id %}
+    <a href="{{ url_for('agreement.view_agreement', agreement_id=req.agreement_id) }}" class="btn btn-outline btn-sm" style="margin-bottom:12px">
+      View Full Agreement Details →
+    </a>
+    {% endif %}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+      <form method="POST" action="{{ url_for('req.accept_direct_agreement', req_id=req.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success">✓ Accept Agreement</button>
+      </form>
+      <form id="rejectDirectForm" method="POST" action="{{ url_for('req.reject_direct_agreement', req_id=req.id) }}" style="display:none">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      </form>
+      <button type="button" class="btn btn-danger"
+              onclick="confirmAction('Reject this agreement? It will be cancelled and the landlord will be notified.','rejectDirectForm')">
+        ✗ Reject Agreement
+      </button>
+    </div>
+  </div>
+  {% elif req.initiated_by_landlord and current_user.id == req.landlord_id and req.status == 'pending' %}
+  <div class="step-card active">
+    <div class="step-card-title">⏳ Step 1 — Waiting for Tenant to Respond</div>
+    <p class="text-muted text-sm">You created this agreement directly. Waiting for <strong>{{ req.tenant.full_name }}</strong> to accept or reject it.</p>
+  </div>
+  {% elif req.initiated_by_landlord and req.status == 'approved' %}
+  <div class="step-card done">
+    <div class="step-card-title">✅ Step 1 — Tenant Accepted the Agreement</div>
+    <p class="text-muted text-sm">{{ req.tenant.full_name }} accepted on {{ req.approved_at.strftime('%d %b %Y %H:%M') if req.approved_at else '' }}. Both parties can now sign.</p>
+    {% if req.agreement_id %}
+    <a href="{{ url_for('agreement.view_agreement', agreement_id=req.agreement_id) }}" class="btn btn-primary btn-sm" style="margin-top:8px">Go to Agreement &amp; Sign →</a>
+    {% endif %}
+  </div>
+  {# STEP 1b: Normal landlord review for tenant-initiated requests #}
+  {% elif not req.initiated_by_landlord and current_user.id == req.landlord_id and req.status == 'pending' %}
   <div class="step-card active">
     <div class="step-card-title">👀 Step 1 — Review This Request</div>
     <p class="text-muted text-sm" style="margin-bottom:14px">Mark as under review to open the negotiation chat.</p>
@@ -367,10 +420,16 @@
         Landlord Sig: {% if agreement.landlord_signature %}✓ Signed{% else %}Pending{% endif %}<br>
         Tenant Sig: {% if agreement.tenant_signature %}✓ Signed{% else %}Pending{% endif %}
       </div>
-      <div style="margin-top:10px">
+      <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
         <a href="{{ url_for('agreement.view_agreement', agreement_id=agreement.id) }}" class="btn btn-outline btn-sm btn-full">
           View Full Agreement Details →
         </a>
+        {% if agreement.shared_file_path %}
+        <a href="{{ url_for('agreement.view_document', agreement_id=agreement.id) }}"
+           target="_blank" class="btn btn-outline btn-sm btn-full">
+          📄 View Uploaded Document — {{ agreement.original_filename }}
+        </a>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -443,6 +502,8 @@ window.addEventListener('DOMContentLoaded', () => {
   const box = document.getElementById('chatMessages');
   if (box) box.scrollTop = box.scrollHeight;
   if (THREAD_ID) setInterval(pollMessages, 3000);
+  // Poll request status every 5 seconds
+  initRequestStatusPolling({{ req.id }}, 5000);
 });
 </script>
 {% endblock %}
