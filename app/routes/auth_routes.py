@@ -1,3 +1,4 @@
+import re
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session
 from flask_login import login_user, logout_user, login_required, current_user
 from app.extensions import db
@@ -8,11 +9,35 @@ from app.services.certificate_service import issue_certificate
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
+_COMMON_PASSWORDS = {
+    'password', 'password1', 'password123', '12345678', '123456789',
+    'qwerty123', 'qwerty', 'abc12345', 'iloveyou', 'admin123',
+    'letmein1', 'welcome1', 'monkey123', 'dragon123', 'validrent',
+    'validrent123', 'nepal123', 'kathmandu1',
+}
+
+
+def _validate_password(password: str) -> list[str]:
+    errors = []
+    if len(password) < 8:
+        errors.append('At least 8 characters required.')
+    if not re.search(r'[A-Z]', password):
+        errors.append('At least one uppercase letter required.')
+    if not re.search(r'[a-z]', password):
+        errors.append('At least one lowercase letter required.')
+    if not re.search(r'\d', password):
+        errors.append('At least one number required.')
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{};\':"\\|,.<>\/?]', password):
+        errors.append('At least one special character required (!@#$%^&* etc.).')
+    if password.lower() in _COMMON_PASSWORDS:
+        errors.append('Password is too common. Choose a more unique password.')
+    return errors
+
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('dashboard.home'))
 
     if request.method == 'POST':
         full_name = request.form.get('full_name', '').strip()
@@ -27,22 +52,22 @@ def register():
             errors.append('Full name is required.')
         if not email or '@' not in email:
             errors.append('Valid email is required.')
-        if len(password) < 8:
-            errors.append('Password must be at least 8 characters.')
-        if password != confirm:
-            errors.append('Passwords do not match.')
         if role not in ('landlord', 'tenant'):
             errors.append('Invalid role selected.')
         if User.query.filter_by(email=email).first():
             errors.append('Email is already registered.')
 
+        pw_errors = _validate_password(password)
+        errors.extend(pw_errors)
+
+        if password != confirm:
+            errors.append('Passwords do not match.')
+
         if errors:
             for e in errors:
                 flash(e, 'error')
-            return render_template('auth/register.html',
-                                   form_data=request.form)
+            return render_template('auth/register.html', form_data=request.form)
 
-        # Generate RSA key pair
         private_pem, public_pem = generate_rsa_keypair()
 
         user = User(
@@ -50,14 +75,14 @@ def register():
             email=email,
             phone=phone,
             role=role,
+            roles=role,
             private_key_pem=private_pem,
             public_key_pem=public_pem,
         )
         user.set_password(password)
         db.session.add(user)
-        db.session.flush()  # get user.id
+        db.session.flush()
 
-        # Issue X.509 certificate
         cert_data = issue_certificate(public_pem, full_name, email)
         cert = Certificate(
             user_id=user.id,
@@ -70,7 +95,7 @@ def register():
         db.session.add(cert)
         db.session.commit()
 
-        flash('Account created successfully! Your digital certificate has been issued. Please log in.', 'success')
+        flash('Account created! Your digital certificate has been issued. Please log in.', 'success')
         return redirect(url_for('auth.login'))
 
     return render_template('auth/register.html', form_data={})
@@ -79,7 +104,7 @@ def register():
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard.index'))
+        return redirect(url_for('dashboard.home'))
 
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
@@ -96,8 +121,10 @@ def login():
             return render_template('auth/login.html')
 
         login_user(user, remember=remember)
+        # Set active_role from user's primary role on login
+        session['active_role'] = user.role
         next_page = request.args.get('next')
-        return redirect(next_page or url_for('dashboard.index'))
+        return redirect(next_page or url_for('dashboard.home'))
 
     return render_template('auth/login.html')
 
@@ -106,5 +133,6 @@ def login():
 @login_required
 def logout():
     logout_user()
+    session.pop('active_role', None)
     flash('You have been logged out.', 'info')
     return redirect(url_for('auth.login'))

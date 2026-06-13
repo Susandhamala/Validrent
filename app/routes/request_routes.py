@@ -8,7 +8,7 @@ Rental request workflow:
 import os
 import uuid
 import hashlib
-from datetime import datetime
+from datetime import datetime, date as date_type
 from pathlib import Path
 from flask import (Blueprint, render_template, redirect, url_for,
                    flash, request, current_app, jsonify)
@@ -74,11 +74,14 @@ def _both_approved(req_obj, stage):
 @req_bp.route('/new/<int:asset_id>', methods=['GET', 'POST'])
 @login_required
 def create_request(asset_id):
-    if current_user.role != 'tenant':
-        flash('Only tenants can create rental requests.', 'error')
+    if not current_user.has_role('tenant'):
+        flash('Only tenants can create rental requests. Add the Tenant role from your dashboard.', 'error')
         return redirect(url_for('dashboard.home'))
 
     asset = RentalAsset.query.get_or_404(asset_id)
+    if asset.owner_id == current_user.id:
+        flash('You cannot request your own listing.', 'error')
+        return redirect(url_for('asset.view_asset', asset_id=asset_id))
     if asset.status != 'available':
         flash('This asset is not currently available.', 'error')
         return redirect(url_for('asset.browse'))
@@ -97,6 +100,19 @@ def create_request(asset_id):
             end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date() if end_date_str else None
         except ValueError:
             start_date = end_date = None
+
+        # ── Date validation ────────────────────────────────────────────────
+        today = date_type.today()
+        date_errors = []
+        if start_date and start_date < today:
+            date_errors.append('Start date cannot be in the past.')
+        if start_date and end_date and end_date <= start_date:
+            date_errors.append('End date must be later than start date.')
+        if date_errors:
+            for e in date_errors:
+                flash(e, 'error')
+            return render_template('requests/create_request.html',
+                                   asset=asset, categories=categories)
 
         try:
             proposed_rent = float(proposed_rent) if proposed_rent else None
@@ -538,12 +554,130 @@ def _auto_generate_pdf(req_obj: AgreementRequest, agreement: RentalAgreement):
 @req_bp.route('/')
 @login_required
 def list_requests():
-    if current_user.role == 'tenant':
-        reqs = AgreementRequest.query.filter_by(
-            tenant_id=current_user.id).order_by(
-            AgreementRequest.created_at.desc()).all()
-    else:
-        reqs = AgreementRequest.query.filter_by(
-            landlord_id=current_user.id).order_by(
-            AgreementRequest.created_at.desc()).all()
+    from sqlalchemy import or_
+    reqs = AgreementRequest.query.filter(
+        or_(
+            AgreementRequest.tenant_id == current_user.id,
+            AgreementRequest.landlord_id == current_user.id,
+        )
+    ).order_by(AgreementRequest.created_at.desc()).all()
     return render_template('requests/list_requests.html', reqs=reqs)
+
+
+# ── STATUS POLLING ENDPOINT ────────────────────────────────────────────────
+
+@req_bp.route('/<int:req_id>/status')
+@login_required
+def request_status(req_id):
+    """Lightweight JSON endpoint polled by frontend to detect status changes."""
+    req_obj = AgreementRequest.query.get_or_404(req_id)
+    if current_user.id not in (req_obj.tenant_id, req_obj.landlord_id):
+        return jsonify({'error': 'Access denied'}), 403
+
+    terms_both = _both_approved(req_obj, 'terms_approval')
+    doc_both = _both_approved(req_obj, 'document_approval')
+    my_terms = bool(_approval_for(req_id, current_user.id, 'terms_approval'))
+    my_doc = bool(_approval_for(req_id, current_user.id, 'document_approval'))
+
+    agreement = req_obj.agreement
+    gen_pdf = None
+    if agreement:
+        gen_pdf = GeneratedPDF.query.filter_by(agreement_id=agreement.id).first()
+
+    return jsonify({
+        'status': req_obj.status,
+        'status_label': req_obj.status_label,
+        'agreement_id': req_obj.agreement_id,
+        'terms_both': terms_both,
+        'doc_both': doc_both,
+        'my_terms_approved': my_terms,
+        'my_doc_approved': my_doc,
+        'landlord_signed': bool(agreement.landlord_signature) if agreement else False,
+        'tenant_signed': bool(agreement.tenant_signature) if agreement else False,
+        'pdf_ready': bool(gen_pdf) if gen_pdf else False,
+        'pdf_status': agreement.final_pdf_status if agreement else None,
+    })
+
+
+# ── ACCEPT DIRECT AGREEMENT (tenant) ──────────────────────────────────────────
+
+@req_bp.route('/<int:req_id>/accept-direct', methods=['POST'])
+@login_required
+def accept_direct_agreement(req_id):
+    """Tenant accepts a landlord-created direct agreement."""
+    req_obj = AgreementRequest.query.get_or_404(req_id)
+
+    if not req_obj.initiated_by_landlord or current_user.id != req_obj.tenant_id:
+        flash('Access denied.', 'error')
+        return redirect(url_for('req.list_requests'))
+
+    if req_obj.status != 'pending':
+        flash('This request has already been responded to.', 'error')
+        return redirect(url_for('req.view_request', req_id=req_id))
+
+    req_obj.status = 'approved'
+    req_obj.approved_at = datetime.utcnow()
+    db.session.commit()
+    flash('Agreement accepted. You can now sign it.', 'success')
+    if req_obj.agreement_id:
+        return redirect(url_for('agreement.view_agreement', agreement_id=req_obj.agreement_id))
+    return redirect(url_for('req.view_request', req_id=req_id))
+
+
+# ── REJECT DIRECT AGREEMENT (tenant) ──────────────────────────────────────────
+
+@req_bp.route('/<int:req_id>/reject-direct', methods=['POST'])
+@login_required
+def reject_direct_agreement(req_id):
+    """Tenant rejects a landlord-created direct agreement, cancelling it."""
+    req_obj = AgreementRequest.query.get_or_404(req_id)
+
+    if not req_obj.initiated_by_landlord or current_user.id != req_obj.tenant_id:
+        flash('Access denied.', 'error')
+        return redirect(url_for('req.list_requests'))
+
+    if req_obj.status != 'pending':
+        flash('This request has already been responded to.', 'error')
+        return redirect(url_for('req.view_request', req_id=req_id))
+
+    req_obj.status = 'rejected'
+    if req_obj.agreement:
+        req_obj.agreement.status = 'cancelled'
+    db.session.commit()
+    flash('Agreement rejected and cancelled.', 'info')
+    return redirect(url_for('req.list_requests'))
+
+
+# ── DELETE REQUEST ─────────────────────────────────────────────────────────────
+
+@req_bp.route('/<int:req_id>/delete', methods=['POST'])
+@login_required
+def delete_request(req_id):
+    """Delete a request that has not led to a fully-signed agreement."""
+    req_obj = AgreementRequest.query.get_or_404(req_id)
+
+    if current_user.id not in (req_obj.tenant_id, req_obj.landlord_id):
+        flash('Access denied.', 'error')
+        return redirect(url_for('req.list_requests'))
+
+    # Block deletion if a fully-signed agreement is linked
+    if req_obj.agreement and req_obj.agreement.is_fully_signed:
+        flash('Cannot delete a request linked to a fully-signed agreement. Use "Request Mutual Deletion" on the agreement instead.', 'error')
+        return redirect(url_for('req.view_request', req_id=req_id))
+
+    # If there's a linked unsigned agreement, cancel it
+    if req_obj.agreement and not req_obj.agreement.is_fully_signed:
+        req_obj.agreement.status = 'cancelled'
+
+    # Delete dependent records first to avoid FK constraint errors
+    PartyApproval.query.filter_by(request_id=req_id).delete()
+
+    thread = req_obj.chat_thread
+    if thread:
+        ChatMessage.query.filter_by(thread_id=thread.id).delete()
+        db.session.delete(thread)
+
+    db.session.delete(req_obj)
+    db.session.commit()
+    flash('Request deleted.', 'success')
+    return redirect(url_for('req.list_requests'))

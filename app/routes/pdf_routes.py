@@ -81,6 +81,17 @@ def generate_pdf(agreement_id):
         if os.path.exists(p):
             tenant_photo_path = p
 
+    # Generate bilingual legal text with remarks
+    from app.models.request import AgreementRequest
+    from app.services.legal_service import generate_bilingual_document
+    en_legal, np_legal = '', ''
+    linked_req = AgreementRequest.query.filter_by(agreement_id=agreement_id).first()
+    if linked_req:
+        try:
+            en_legal, np_legal = generate_bilingual_document(linked_req, agreement)
+        except Exception:
+            pass
+
     try:
         pdf_hash = generate_certificate_pdf(
             agreement=agreement,
@@ -93,6 +104,8 @@ def generate_pdf(agreement_id):
             verification_code=vcode,
             landlord_photo_path=landlord_photo_path,
             tenant_photo_path=tenant_photo_path,
+            en_legal_text=en_legal,
+            np_legal_text=np_legal,
         )
 
         existing_pdf = GeneratedPDF.query.filter_by(agreement_id=agreement_id).first()
