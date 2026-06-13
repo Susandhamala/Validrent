@@ -371,6 +371,96 @@
 </div>
 {% endif %}
 
+<!-- TENANT IDENTITY DOCUMENT SECTION -->
+{% if agreement.tenant_id %}
+{% set tenant_doc_photo = tenant_photo %}
+<div class="card pop-in pop-in-delay-4" style="margin-top:16px">
+  <div class="card-body">
+    <div class="section-title">Tenant Identity Document
+      <span style="font-size:11px;font-weight:400;color:var(--grey-500);margin-left:8px">Government-issued ID — reviewed by landlord</span>
+    </div>
+
+    {% if tenant_doc_photo and tenant_doc_photo.document_path %}
+      <!-- Document exists -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+        <div>
+          <div class="text-muted text-sm" style="text-transform:uppercase;letter-spacing:.4px;font-weight:700;margin-bottom:6px">Document Type</div>
+          <div style="font-weight:600;font-size:14px">
+            {% set doc_labels = {
+              'citizenship': 'Citizenship Certificate (नागरिकता)',
+              'passport': 'Passport (राहदानी)',
+              'driving_license': 'Driving License (सवारी चालक अनुमतिपत्र)',
+              'voter_id': 'Voter ID Card (मतदाता परिचयपत्र)',
+              'national_id': 'National ID Card (राष्ट्रिय परिचयपत्र)'
+            } %}
+            {{ doc_labels.get(tenant_doc_photo.document_type, tenant_doc_photo.document_type or 'Identity Document') }}
+          </div>
+          <div style="margin-top:10px">
+            <a href="{{ url_for('photo.serve_document', agreement_id=agreement.id) }}"
+               target="_blank" class="btn btn-outline btn-sm">
+              🪪 View Document
+            </a>
+          </div>
+        </div>
+        <div>
+          {% if tenant_doc_photo.document_approved %}
+          <div style="padding:10px 14px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px">
+            <div style="color:var(--success);font-weight:700;font-size:13px">✓ Document Approved</div>
+            {% if tenant_doc_photo.document_approved_at %}
+            <div class="text-muted text-sm">{{ tenant_doc_photo.document_approved_at.strftime('%d %b %Y %H:%M') }}</div>
+            {% endif %}
+            {% if tenant_doc_photo.approved_by_user %}
+            <div class="text-muted text-sm">by {{ tenant_doc_photo.approved_by_user.full_name }}</div>
+            {% endif %}
+          </div>
+          {% else %}
+          <div style="padding:10px 14px;background:#fef3c7;border:1.5px solid #fcd34d;border-radius:8px">
+            <div style="color:#92400e;font-weight:700;font-size:13px">⏳ Pending Approval</div>
+            <div class="text-muted text-sm">Awaiting landlord review</div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if current_user.id == agreement.landlord_id and not tenant_doc_photo.document_approved %}
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--grey-200)">
+        <p style="font-size:13px;color:var(--grey-600);margin-bottom:10px">
+          Review the tenant's identity document before approving. The document will be included in the PDF certificate.
+        </p>
+        <div style="display:flex;gap:10px;align-items:center">
+          <a href="{{ url_for('photo.serve_document', agreement_id=agreement.id) }}" target="_blank"
+             class="btn btn-outline btn-sm">🪪 View Document First</a>
+          <form id="approveDocForm" method="POST"
+                action="{{ url_for('photo.approve_document', agreement_id=agreement.id) }}"
+                style="display:none">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          </form>
+          <button type="button" class="btn btn-success btn-sm"
+                  onclick="confirmAction('Approve the tenant\'s identity document?\n\nThis confirms you have verified the document is genuine.','approveDocForm')">
+            ✓ Approve Document
+          </button>
+        </div>
+      </div>
+      {% endif %}
+
+    {% elif current_user.id == agreement.tenant_id %}
+      <!-- Tenant hasn't uploaded document yet -->
+      <div style="padding:12px 14px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px">
+        <div style="font-weight:700;color:#dc2626;font-size:13px;margin-bottom:4px">⚠ No Document Uploaded</div>
+        <div style="font-size:13px;color:#991b1b;margin-bottom:10px">
+          Please upload your government-issued identity document. It is required for the PDF certificate.
+        </div>
+        <a href="{{ url_for('photo.capture_photo', agreement_id=agreement.id) }}" class="btn btn-primary btn-sm">
+          Upload Document →
+        </a>
+      </div>
+    {% else %}
+      <div class="text-muted text-sm">The tenant has not yet uploaded their identity document.</div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
 <!-- ── FLOATING CHAT WIDGET ────────────────────────────────────────────────── -->
 {% if thread %}
 <div id="chatWidget" style="position:fixed;bottom:24px;right:24px;z-index:1000;font-family:var(--font)">
@@ -380,9 +470,10 @@
           style="width:56px;height:56px;border-radius:50%;background:var(--black);color:var(--white);border:none;cursor:pointer;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;font-size:22px;position:relative"
           title="Chat with the other party">
     💬
-    {% set msg_count = chat_messages | selectattr('is_system', 'equalto', False) | list | length %}
-    {% if msg_count > 0 %}
-    <span id="chatBadge" style="position:absolute;top:2px;right:2px;background:var(--danger);color:var(--white);border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ msg_count }}</span>
+    {% set ns = namespace(real_count=0) %}
+    {% for _m in chat_messages %}{% if not _m.is_system %}{% set ns.real_count = ns.real_count + 1 %}{% endif %}{% endfor %}
+    {% if ns.real_count > 0 %}
+    <span id="chatBadge" style="position:absolute;top:2px;right:2px;background:var(--danger);color:var(--white);border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center">{{ ns.real_count }}</span>
     {% else %}
     <span id="chatBadge" style="position:absolute;top:2px;right:2px;background:var(--danger);color:var(--white);border-radius:50%;width:18px;height:18px;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center">●</span>
     {% endif %}
@@ -409,8 +500,10 @@
 
     <!-- Messages -->
     <div id="agChatMessages" style="height:280px;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#fafafa">
-      {% set real_msgs = chat_messages | selectattr('is_system', 'equalto', False) | list %}
-      {% for msg in real_msgs %}
+      {% set ns2 = namespace(has_user_msgs=False) %}
+      {% for msg in chat_messages %}
+      {% if not msg.is_system %}
+      {% set ns2.has_user_msgs = True %}
       <div style="display:flex;flex-direction:column;align-items:{% if msg.sender_id == current_user.id %}flex-end{% else %}flex-start{% endif %}">
         <div style="max-width:82%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.45;
                     {% if msg.sender_id == current_user.id %}background:var(--black);color:var(--white);border-bottom-right-radius:3px{% else %}background:var(--grey-100);color:var(--black);border-bottom-left-radius:3px{% endif %}">
@@ -418,9 +511,10 @@
         </div>
         <div style="font-size:10px;color:var(--grey-400);margin-top:2px">{{ msg.sender_name }} &bull; {{ msg.sent_at.strftime('%d %b %H:%M') }}</div>
       </div>
+      {% endif %}
       {% endfor %}
-      {% if not real_msgs %}
-      <div style="text-align:center;color:var(--grey-400);font-size:12px;padding:24px 0">No messages yet — start the conversation!</div>
+      {% if not ns2.has_user_msgs %}
+      <div data-empty="" style="text-align:center;color:var(--grey-400);font-size:12px;padding:24px 0">No messages yet — start the conversation!</div>
       {% endif %}
     </div>
 

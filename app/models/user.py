@@ -27,7 +27,8 @@ class User(UserMixin, db.Model):
     # Relationships
     certificates = db.relationship('Certificate', back_populates='user', lazy='dynamic')
     assets = db.relationship('RentalAsset', back_populates='owner', lazy='dynamic')
-    photos = db.relationship('IdentityPhoto', back_populates='user', lazy='dynamic')
+    photos = db.relationship('IdentityPhoto', back_populates='user', lazy='dynamic',
+                             foreign_keys='IdentityPhoto.user_id')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

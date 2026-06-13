@@ -131,6 +131,7 @@ def generate_certificate_pdf(
     agreement, landlord, tenant, landlord_cert, tenant_cert,
     qr_image_path, output_path, verification_code,
     landlord_photo_path=None, tenant_photo_path=None,
+    tenant_document_path=None, asset_photo_path=None,
     en_legal_text: str = '', np_legal_text: str = '',
 ):
     """Generate professional bilingual (EN + NP) rental certificate PDF."""
@@ -182,6 +183,17 @@ def generate_certificate_pdf(
     else:
         _kv_table(story, [['Category', agreement.rental_category or 'N/A', '', '']])
 
+    # ── PROPERTY PHOTO ─────────────────────────────────────────────────────────
+    if asset_photo_path and os.path.exists(asset_photo_path):
+        _section_header(story, "RENTAL PROPERTY PHOTO")
+        try:
+            img = RLImage(asset_photo_path, width=80 * mm, height=55 * mm)
+            img.hAlign = 'CENTER'
+            story.append(img)
+            story.append(Spacer(1, 4))
+        except Exception:
+            pass
+
     # ── PARTIES + IDENTITY PHOTOS ─────────────────────────────────────────────
     _section_header(story, "PARTIES & IDENTITY EVIDENCE")
 
@@ -228,20 +240,37 @@ def generate_certificate_pdf(
     story.append(pt)
     story.append(Spacer(1, 6))
 
-    # ── REMARKS ───────────────────────────────────────────────────────────────
-    if agreement.landlord_remarks or agreement.tenant_remarks:
-        _section_header(story, "REMARKS AT SIGNING")
-        remarks_data = []
-        if agreement.landlord_remarks:
-            remarks_data.append(['Landlord Remarks', agreement.landlord_remarks])
-        if agreement.tenant_remarks:
-            remarks_data.append(['Tenant Remarks', agreement.tenant_remarks])
-        _kv_table(story, remarks_data, col_widths=[40 * mm, 134 * mm])
+    # ── TENANT IDENTITY DOCUMENT ──────────────────────────────────────────────
+    if tenant_document_path and os.path.exists(tenant_document_path):
+        _section_header(story, "TENANT IDENTITY DOCUMENT (Government Issued)")
+        ext = tenant_document_path.rsplit('.', 1)[-1].lower()
+        if ext in ('jpg', 'jpeg', 'png'):
+            try:
+                doc_img = RLImage(tenant_document_path, width=90 * mm, height=60 * mm)
+                doc_img.hAlign = 'CENTER'
+                story.append(doc_img)
+            except Exception:
+                story.append(Paragraph('[Document image could not be rendered]', BODY))
+        else:
+            story.append(Paragraph(
+                f'Identity document (PDF) submitted by tenant — on file at Valid Rent platform.',
+                BODY))
+        story.append(Spacer(1, 4))
 
-    # ── SPECIAL TERMS ─────────────────────────────────────────────────────────
-    if agreement.terms:
-        _section_header(story, "SPECIAL TERMS & CONDITIONS")
-        story.append(Paragraph(agreement.terms, BODY))
+    # ── FINAL AGREED TERMS ────────────────────────────────────────────────────
+    if agreement.landlord_remarks or agreement.tenant_remarks:
+        _section_header(story, "FINAL AGREED TERMS & CONDITIONS")
+        story.append(Paragraph(
+            "The following terms were mutually agreed and recorded by both parties "
+            "at the time of digital signing. These are binding final conditions.",
+            BODY))
+        story.append(Spacer(1, 4))
+        if agreement.landlord_remarks:
+            story.append(Paragraph(f"Landlord's Final Terms:", LABEL))
+            story.append(Paragraph(agreement.landlord_remarks, BODY))
+        if agreement.tenant_remarks:
+            story.append(Paragraph(f"Tenant's Acceptance & Conditions:", LABEL))
+            story.append(Paragraph(agreement.tenant_remarks, BODY))
         story.append(Spacer(1, 4))
 
     # ── DIGITAL SIGNATURES ────────────────────────────────────────────────────

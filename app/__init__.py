@@ -124,6 +124,11 @@ def _run_migrations():
         ("rental_agreements", "tenant_delete_requested", "ALTER TABLE rental_agreements ADD COLUMN tenant_delete_requested DATETIME"),
         ("rental_agreements", "shared_file_path", "ALTER TABLE rental_agreements ADD COLUMN shared_file_path TEXT"),
         ("agreement_requests", "initiated_by_landlord", "ALTER TABLE agreement_requests ADD COLUMN initiated_by_landlord BOOLEAN DEFAULT 0"),
+        ("identity_photos", "document_path", "ALTER TABLE identity_photos ADD COLUMN document_path TEXT"),
+        ("identity_photos", "document_type", "ALTER TABLE identity_photos ADD COLUMN document_type TEXT"),
+        ("identity_photos", "document_approved", "ALTER TABLE identity_photos ADD COLUMN document_approved BOOLEAN DEFAULT 0"),
+        ("identity_photos", "document_approved_at", "ALTER TABLE identity_photos ADD COLUMN document_approved_at DATETIME"),
+        ("identity_photos", "document_approved_by", "ALTER TABLE identity_photos ADD COLUMN document_approved_by INTEGER"),
     ]
     for table, column, sql in migrations:
         try:

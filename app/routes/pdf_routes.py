@@ -74,6 +74,8 @@ def generate_pdf(agreement_id):
 
     landlord_photo_path = None
     tenant_photo_path = None
+    tenant_document_path = None
+    asset_photo_path = None
 
     if landlord_photo and landlord_photo.photo_encrypted_path:
         p = landlord_photo.photo_encrypted_path
@@ -84,6 +86,16 @@ def generate_pdf(agreement_id):
         p = tenant_photo.photo_encrypted_path
         if os.path.exists(p):
             tenant_photo_path = p
+
+    if tenant_photo and tenant_photo.document_path:
+        p = tenant_photo.document_path
+        if os.path.exists(p):
+            tenant_document_path = p
+
+    if agreement.asset and getattr(agreement.asset, 'photo_path', None):
+        p = agreement.asset.photo_path
+        if os.path.exists(p):
+            asset_photo_path = p
 
     # Generate bilingual legal text with remarks
     from app.models.request import AgreementRequest
@@ -108,6 +120,8 @@ def generate_pdf(agreement_id):
             verification_code=vcode,
             landlord_photo_path=landlord_photo_path,
             tenant_photo_path=tenant_photo_path,
+            tenant_document_path=tenant_document_path,
+            asset_photo_path=asset_photo_path,
             en_legal_text=en_legal,
             np_legal_text=np_legal,
         )
