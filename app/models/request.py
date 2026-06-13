@@ -32,6 +32,9 @@ class AgreementRequest(db.Model):
     # After approval → linked agreement
     agreement_id = db.Column(db.Integer, db.ForeignKey('rental_agreements.id'))
 
+    # True when the landlord directly created an agreement and sent it for tenant review
+    initiated_by_landlord = db.Column(db.Boolean, default=False)
+
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     reviewed_at = db.Column(db.DateTime)

@@ -21,6 +21,9 @@ class User(UserMixin, db.Model):
     private_key_pem = db.Column(db.Text)
     public_key_pem = db.Column(db.Text)
 
+    # Multi-role support: comma-separated e.g. "landlord" / "tenant" / "landlord,tenant"
+    roles = db.Column(db.String(100))
+
     # Relationships
     certificates = db.relationship('Certificate', back_populates='user', lazy='dynamic')
     assets = db.relationship('RentalAsset', back_populates='owner', lazy='dynamic')
@@ -32,9 +35,22 @@ class User(UserMixin, db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    def has_role(self, r):
+        effective = self.roles or self.role
+        return r in effective.split(',')
+
+    def add_role(self, r):
+        current = set((self.roles or self.role).split(','))
+        current.add(r)
+        self.roles = ','.join(sorted(current))
+
     @property
     def display_role(self):
         return self.role.capitalize()
+
+    @property
+    def all_roles(self):
+        return (self.roles or self.role).split(',')
 
     def __repr__(self):
         return f'<User {self.email}>'

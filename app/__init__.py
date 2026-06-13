@@ -1,4 +1,5 @@
-from flask import Flask, session, redirect, request as flask_request, url_for
+from flask import Flask, session, redirect, request as flask_request, url_for, jsonify, flash
+from flask_login import login_required, current_user
 from pathlib import Path
 from app.config import Config
 from app.extensions import db, login_manager, csrf
@@ -42,9 +43,15 @@ def create_app(config_class=Config):
     from app.models.request import AgreementRequest
 
     @app.template_filter('pending_requests_count')
-    def pending_requests_count(landlord_id):
-        return AgreementRequest.query.filter_by(
-            landlord_id=landlord_id, status='pending').count()
+    def pending_requests_count(user_id):
+        # Tenant-initiated requests waiting on this user as landlord
+        landlord_pending = AgreementRequest.query.filter_by(
+            landlord_id=user_id, status='pending').filter(
+            AgreementRequest.initiated_by_landlord == False).count()
+        # Landlord-initiated direct agreements waiting on this user as tenant
+        tenant_pending = AgreementRequest.query.filter_by(
+            tenant_id=user_id, status='pending', initiated_by_landlord=True).count()
+        return landlord_pending + tenant_pending
 
     # ── Language switching ───────────────────────────────────────────────────
     @app.route('/set-lang/<lang>')
@@ -54,18 +61,83 @@ def create_app(config_class=Config):
         referrer = flask_request.referrer or '/'
         return redirect(referrer)
 
-    # ── Translation context processor ────────────────────────────────────────
+    # ── Role switching (multi-role support) ──────────────────────────────────
+    @app.route('/switch-role', methods=['POST'])
+    @login_required
+    def switch_role():
+        new_role = flask_request.form.get('role', '').strip()
+        if new_role not in ('landlord', 'tenant') or not current_user.has_role(new_role):
+            flash('You are not authorized to switch to that role.', 'error')
+            return redirect(flask_request.referrer or url_for('dashboard.home'))
+        session['active_role'] = new_role
+        flash(f'Switched to {new_role.capitalize()} mode.', 'success')
+        referrer = flask_request.referrer or url_for('dashboard.home')
+        return redirect(referrer)
+
+    @app.route('/add-role', methods=['POST'])
+    @login_required
+    def add_role():
+        new_role = flask_request.form.get('role', '').strip()
+        if new_role not in ('landlord', 'tenant'):
+            flash('Invalid role.', 'error')
+            return redirect(flask_request.referrer or url_for('dashboard.home'))
+        current_user.add_role(new_role)
+        if 'active_role' not in session:
+            session['active_role'] = new_role
+        db.session.commit()
+        flash(f'You can now also act as a {new_role.capitalize()}.', 'success')
+        return redirect(flask_request.referrer or url_for('dashboard.home'))
+
+    # ── Translation + active_role context processor ────────────────────────
     @app.context_processor
     def inject_lang():
         lang = session.get('lang', 'en')
-        return dict(tr=get_translations(lang), lang=lang, supported_langs=SUPPORTED)
+        active_role = None
+        if current_user.is_authenticated:
+            active_role = session.get('active_role', current_user.role)
+        return dict(
+            tr=get_translations(lang),
+            lang=lang,
+            supported_langs=SUPPORTED,
+            active_role=active_role,
+        )
 
-    # ── DB init + seed ──────────────────────────────────────────────────────
+    # ── DB init + seed + migration ──────────────────────────────────────────
     with app.app_context():
         db.create_all()
+        _run_migrations()
         _seed_categories()
 
     return app
+
+
+def _run_migrations():
+    """Add new columns to existing tables without breaking existing data."""
+    from sqlalchemy import text
+    migrations = [
+        ("users", "roles", "ALTER TABLE users ADD COLUMN roles TEXT"),
+        ("rental_assets", "photo_path", "ALTER TABLE rental_assets ADD COLUMN photo_path TEXT"),
+        ("rental_assets", "rent_period", "ALTER TABLE rental_assets ADD COLUMN rent_period TEXT DEFAULT 'per_month'"),
+        ("rental_agreements", "landlord_remarks", "ALTER TABLE rental_agreements ADD COLUMN landlord_remarks TEXT"),
+        ("rental_agreements", "tenant_remarks", "ALTER TABLE rental_agreements ADD COLUMN tenant_remarks TEXT"),
+        ("rental_agreements", "landlord_delete_requested", "ALTER TABLE rental_agreements ADD COLUMN landlord_delete_requested DATETIME"),
+        ("rental_agreements", "tenant_delete_requested", "ALTER TABLE rental_agreements ADD COLUMN tenant_delete_requested DATETIME"),
+        ("rental_agreements", "shared_file_path", "ALTER TABLE rental_agreements ADD COLUMN shared_file_path TEXT"),
+        ("agreement_requests", "initiated_by_landlord", "ALTER TABLE agreement_requests ADD COLUMN initiated_by_landlord BOOLEAN DEFAULT 0"),
+    ]
+    for table, column, sql in migrations:
+        try:
+            db.session.execute(text(sql))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    # Backfill roles from role for existing users
+    try:
+        db.session.execute(text("UPDATE users SET roles = role WHERE roles IS NULL"))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
 
 def _seed_categories():
@@ -80,7 +152,7 @@ def _seed_categories():
         {'name': 'Bike/Scooter',      'description': 'Motorcycle or scooter rental',      'icon': 'bicycle',   'risk_level': 'medium'},
         {'name': 'Machinery',         'description': 'Heavy machinery or equipment',      'icon': 'gear',      'risk_level': 'high'},
         {'name': 'Office/Commercial', 'description': 'Office or commercial space rental', 'icon': 'briefcase', 'risk_level': 'medium'},
-        {'name': 'Storage/Warehouse', 'description': 'Storage unit or warehouse rental', 'icon': 'box',       'risk_level': 'low'},
+        {'name': 'Storage/Warehouse', 'description': 'Storage unit or warehouse rental',  'icon': 'box',       'risk_level': 'low'},
         {'name': 'Other',             'description': 'Other sensitive rental assets',     'icon': 'tag',       'risk_level': 'medium'},
     ]
     for cat_data in categories:

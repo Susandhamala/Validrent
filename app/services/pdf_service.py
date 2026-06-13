@@ -11,7 +11,7 @@ from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
     HRFlowable, Image as RLImage, PageBreak, KeepTogether
 )
-from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
@@ -22,11 +22,20 @@ DISCLAIMER = (
     "Any government-style design is used solely for educational demonstration purposes."
 )
 
+BLACK = colors.HexColor('#0a0a0a')
+DARK  = colors.HexColor('#1e293b')
+GOLD  = colors.HexColor('#b45309')
+GREEN = colors.HexColor('#15803d')
+RED   = colors.HexColor('#dc2626')
+GREY  = colors.HexColor('#64748b')
+LIGHT = colors.HexColor('#f8fafc')
+MID   = colors.HexColor('#e2e8f0')
+
 
 def _add_watermark(canvas, doc):
     canvas.saveState()
-    canvas.setFont('Helvetica-Bold', 20)
-    canvas.setFillColorRGB(0.87, 0.87, 0.87)
+    canvas.setFont('Helvetica-Bold', 18)
+    canvas.setFillColorRGB(0.9, 0.9, 0.9)
     canvas.translate(A4[0] / 2, A4[1] / 2)
     canvas.rotate(45)
     canvas.drawCentredString(0, 0, WATERMARK_TEXT)
@@ -37,12 +46,85 @@ def _page_footer(canvas, doc):
     _add_watermark(canvas, doc)
     canvas.saveState()
     canvas.setFont('Helvetica', 7)
-    canvas.setFillColor(colors.grey)
-    canvas.drawString(20 * mm, 10 * mm,
-                      f"Valid Rent Platform — Academic Prototype | Page {doc.page}")
-    canvas.drawRightString(A4[0] - 20 * mm, 10 * mm,
+    canvas.setFillColor(GREY)
+    canvas.drawString(18 * mm, 10 * mm,
+                      f"Valid Rent Platform — Academic Prototype | Nepal")
+    canvas.drawCentredString(A4[0] / 2, 10 * mm, f"Page {doc.page}")
+    canvas.drawRightString(A4[0] - 18 * mm, 10 * mm,
                            f"Generated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}")
     canvas.restoreState()
+
+
+def _s(name, **kw):
+    base = getSampleStyleSheet()['Normal']
+    return ParagraphStyle(name, parent=base, **kw)
+
+
+# ── shared styles ──────────────────────────────────────────────────────────────
+H1     = _s('H1',  fontSize=20, fontName='Helvetica-Bold',  textColor=BLACK,
+            alignment=TA_CENTER, spaceAfter=2, spaceBefore=0)
+H2     = _s('H2',  fontSize=13, fontName='Helvetica-Bold',  textColor=BLACK,
+            alignment=TA_CENTER, spaceAfter=2, spaceBefore=4)
+SEC    = _s('SEC', fontSize=10, fontName='Helvetica-Bold',  textColor=colors.white,
+            alignment=TA_CENTER, spaceAfter=0, spaceBefore=0,
+            backColor=DARK, borderPadding=(4, 8, 4, 8))
+SUB    = _s('SUB', fontSize=9,  fontName='Helvetica',       textColor=GREY,
+            alignment=TA_CENTER, spaceAfter=2)
+WARN   = _s('WARN',fontSize=7,  fontName='Helvetica-Bold',  textColor=RED,
+            alignment=TA_CENTER, spaceAfter=4)
+BODY   = _s('BODY',fontSize=9,  fontName='Helvetica',       textColor=DARK,
+            spaceAfter=3, leading=14, alignment=TA_JUSTIFY)
+MONO   = _s('MONO',fontSize=7,  fontName='Courier',         textColor=DARK,
+            spaceAfter=3, leading=10, wordWrap='CJK')
+LABEL  = _s('LBL', fontSize=8,  fontName='Helvetica-Bold',  textColor=GREY,
+            spaceAfter=1)
+VAL    = _s('VAL', fontSize=9,  fontName='Helvetica',       textColor=BLACK,
+            spaceAfter=4)
+OK     = _s('OK',  fontSize=9,  fontName='Helvetica-Bold',  textColor=GREEN,
+            spaceAfter=2)
+FAIL   = _s('FAIL',fontSize=9,  fontName='Helvetica-Bold',  textColor=RED,
+            spaceAfter=2)
+
+
+def _section_header(story, text):
+    story.append(Spacer(1, 6))
+    t = Table([[Paragraph(text, SEC)]], colWidths=[174 * mm])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, -1), DARK),
+        ('PADDING',    (0, 0), (-1, -1), 6),
+        ('ROUNDEDCORNERS', [4]),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 4))
+
+
+def _kv_table(story, rows, col_widths=None):
+    if col_widths is None:
+        col_widths = [40 * mm, 47 * mm, 40 * mm, 47 * mm]
+    if len(rows[0]) == 2:
+        col_widths = [50 * mm, 124 * mm]
+
+    styled = []
+    for row in rows:
+        styled_row = []
+        for i, cell in enumerate(row):
+            is_label = (i % 2 == 0)
+            p = Paragraph(str(cell) if cell else '—',
+                          _s(f'kv{i}', fontSize=8,
+                             fontName='Helvetica-Bold' if is_label else 'Helvetica',
+                             textColor=GREY if is_label else BLACK))
+            styled_row.append(p)
+        styled.append(styled_row)
+
+    t = Table(styled, colWidths=col_widths)
+    t.setStyle(TableStyle([
+        ('ROWBACKGROUNDS', (0, 0), (-1, -1), [LIGHT, colors.white]),
+        ('GRID',           (0, 0), (-1, -1), 0.3, MID),
+        ('PADDING',        (0, 0), (-1, -1), 5),
+        ('VALIGN',         (0, 0), (-1, -1), 'TOP'),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 4))
 
 
 def generate_certificate_pdf(
@@ -51,213 +133,221 @@ def generate_certificate_pdf(
     landlord_photo_path=None, tenant_photo_path=None,
     en_legal_text: str = '', np_legal_text: str = '',
 ):
-    """Generate official-style bilingual (EN + NP) PDF verification certificate."""
+    """Generate professional bilingual (EN + NP) rental certificate PDF."""
     Path(os.path.dirname(output_path)).mkdir(parents=True, exist_ok=True)
 
     doc = SimpleDocTemplate(
         output_path, pagesize=A4,
         rightMargin=18 * mm, leftMargin=18 * mm,
-        topMargin=18 * mm, bottomMargin=22 * mm,
+        topMargin=16 * mm, bottomMargin=22 * mm,
     )
-
-    styles = getSampleStyleSheet()
-
-    def style(name, **kw):
-        s = ParagraphStyle(name, parent=styles['Normal'], **kw)
-        return s
-
-    h1 = style('H1', fontSize=18, fontName='Helvetica-Bold',
-                textColor=colors.black, alignment=TA_CENTER, spaceAfter=4)
-    h2 = style('H2', fontSize=13, fontName='Helvetica-Bold', spaceAfter=4, spaceBefore=10)
-    sub = style('Sub', fontSize=9, fontName='Helvetica',
-                textColor=colors.grey, alignment=TA_CENTER, spaceAfter=2)
-    warn = style('Warn', fontSize=7, fontName='Helvetica-Bold',
-                 textColor=colors.red, alignment=TA_CENTER, spaceAfter=6)
-    body = style('Body', fontSize=9, fontName='Helvetica',
-                 textColor=colors.black, spaceAfter=4, leading=14)
-    mono = style('Mono', fontSize=7, fontName='Courier',
-                 textColor=colors.darkblue, spaceAfter=4, leading=10, wordWrap='CJK')
-
     story = []
 
-    # ── COVER / HEADER ──────────────────────────────────────────────────────
-    story.append(Paragraph("⬡  VALID RENT AUTHORITY DEMO SEAL  ⬡", h1))
-    story.append(Paragraph("Secure Rental Verification Certificate", style(
-        'TitleSub', fontSize=15, fontName='Helvetica-Bold',
-        textColor=colors.black, alignment=TA_CENTER, spaceAfter=2)))
-    story.append(Paragraph("Valid Rent Platform · Academic Prototype · Nepal", sub))
-    story.append(Paragraph(WATERMARK_TEXT, warn))
-    story.append(HRFlowable(width='100%', thickness=2, color=colors.black, spaceAfter=12))
+    # ── PAGE 1: COVER / CERTIFICATE HEADER ────────────────────────────────────
+    story.append(Spacer(1, 4))
+    story.append(Paragraph("VALID RENT AUTHORITY", H1))
+    story.append(Paragraph("Secure Rental Verification Certificate", H2))
+    story.append(Paragraph("Valid Rent Platform  ·  Academic Prototype  ·  Nepal", SUB))
+    story.append(Paragraph(
+        "House Rent Act 2053  |  Contract Act 2056  |  Electronic Transactions Act 2063", SUB))
+    story.append(Paragraph("⚠  " + WATERMARK_TEXT + "  ⚠", WARN))
+    story.append(HRFlowable(width='100%', thickness=2, color=BLACK, spaceAfter=10))
 
-    # ── CERT META ───────────────────────────────────────────────────────────
-    cert_data = [
-        ['Certificate No.', (verification_code or '')[:20] + '…',
-         'Agreement ID', str(agreement.agreement_uid)[:18] + '…'],
-        ['Generated At', datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC'),
-         'Status', (agreement.status or '').upper()],
+    # ── CERTIFICATE META ───────────────────────────────────────────────────────
+    _section_header(story, "CERTIFICATE INFORMATION")
+    _kv_table(story, [
+        ['Certificate No.', (verification_code or 'N/A'),
+         'Agreement ID',    str(agreement.agreement_uid)],
+        ['Generated At',    datetime.utcnow().strftime('%d %B %Y, %H:%M UTC'),
+         'Status',          (agreement.status or '').upper().replace('_', ' ')],
         ['Rental Category', agreement.rental_category or 'N/A',
-         'Rent/Month', f"{agreement.currency} {agreement.rent_amount or 0:,.2f}"],
-        ['Start Date', str(agreement.start_date or 'N/A'),
-         'End Date', str(agreement.end_date or 'N/A')],
-    ]
-    _meta_table(story, cert_data)
-    story.append(Spacer(1, 8))
+         'Rent',            f"{agreement.currency} {agreement.rent_amount or 0:,.2f}"],
+        ['Start Date',      str(agreement.start_date or 'N/A'),
+         'End Date',        str(agreement.end_date or 'N/A')],
+    ])
 
-    # ── ASSET ───────────────────────────────────────────────────────────────
-    story.append(Paragraph("▸ RENTAL ASSET DETAILS", h2))
+    # ── ASSET DETAILS ──────────────────────────────────────────────────────────
+    _section_header(story, "RENTAL ASSET DETAILS")
     if agreement.asset:
         a = agreement.asset
-        asset_data = [
-            ['Asset Title', a.asset_title, 'Category', a.category.name if a.category else 'N/A'],
-            ['Type', a.asset_type or 'N/A', 'Identifier', a.asset_identifier or 'N/A'],
-            ['Location', a.location or 'N/A', 'Est. Value', f"NPR {a.estimated_value or 0:,.0f}"],
-        ]
+        _kv_table(story, [
+            ['Asset Title',   a.asset_title,
+             'Category',      a.category.name if a.category else 'N/A'],
+            ['Asset Type',    a.asset_type or 'N/A',
+             'Identifier',    a.asset_identifier or 'N/A'],
+            ['Location',      a.location or 'N/A',
+             'Asking Rent',   f"NPR {a.estimated_value or 0:,.0f} {a.rent_period_label}"],
+            ['Description',   (a.description or 'N/A')[:120], '', ''],
+        ])
     else:
-        asset_data = [['Category', agreement.rental_category or 'N/A', '', '']]
-    _meta_table(story, asset_data)
-    story.append(Spacer(1, 8))
+        _kv_table(story, [['Category', agreement.rental_category or 'N/A', '', '']])
 
-    # ── PARTIES + PHOTOS ────────────────────────────────────────────────────
-    story.append(Paragraph("▸ PARTIES WITH IDENTITY EVIDENCE", h2))
+    # ── PARTIES + IDENTITY PHOTOS ─────────────────────────────────────────────
+    _section_header(story, "PARTIES & IDENTITY EVIDENCE")
 
-    def _party_col(user, cert, photo_path, sig, role_label):
-        col = [Paragraph(role_label, style(
-            'RL', fontSize=9, fontName='Helvetica-Bold',
-            textColor=colors.white, alignment=TA_CENTER,
-            backColor=colors.black, spaceAfter=4))]
+    def _party_block(user, cert, photo_path, sig_ts, cert_serial, role_label):
+        items = []
+        # Role header
+        items.append(Paragraph(role_label, _s('rl', fontSize=9, fontName='Helvetica-Bold',
+            textColor=colors.white, backColor=BLACK, alignment=TA_CENTER,
+            spaceAfter=4, borderPadding=(3, 6, 3, 6))))
         # Photo
         if photo_path and os.path.exists(photo_path):
             try:
-                col.append(RLImage(photo_path, width=28 * mm, height=28 * mm))
+                items.append(RLImage(photo_path, width=26 * mm, height=26 * mm))
             except Exception:
-                col.append(Paragraph('[Photo error]', body))
+                items.append(Paragraph('[Photo error]', BODY))
         else:
-            col.append(Paragraph('[No photo captured]', body))
-        col.append(Paragraph(f"<b>{user.full_name}</b>", body))
-        col.append(Paragraph(user.email, body))
-        col.append(Paragraph(f"Phone: {user.phone or 'N/A'}", body))
-        cert_status = cert.status_display if cert else 'N/A'
-        cert_serial = (cert.serial_number[:12] + '…') if cert else 'N/A'
-        col.append(Paragraph(f"Cert: {cert_status} | {cert_serial}", mono))
-        signed_at = sig.strftime('%Y-%m-%d %H:%M') if sig else 'Not signed'
-        sig_status = '✓ SIGNED' if sig else '✗ NOT SIGNED'
-        col.append(Paragraph(f"Signature: {sig_status}", body))
-        col.append(Paragraph(f"Signed at: {signed_at}", body))
-        return col
+            items.append(Paragraph('[No identity photo captured]', BODY))
+        items.append(Paragraph(f"<b>{user.full_name}</b>", BODY))
+        items.append(Paragraph(user.email, BODY))
+        items.append(Paragraph(f"Phone: {getattr(user, 'phone', None) or 'N/A'}", BODY))
+        cert_s = cert.status_display if cert else 'No Certificate'
+        cert_n = cert_serial or 'N/A'
+        items.append(Paragraph(f"Certificate: {cert_s}", BODY))
+        items.append(Paragraph(f"Serial: {cert_n}", MONO))
+        if sig_ts:
+            items.append(Paragraph("✓  DIGITALLY SIGNED", OK))
+            items.append(Paragraph(f"Signed: {sig_ts.strftime('%d %b %Y %H:%M UTC')}", BODY))
+        else:
+            items.append(Paragraph("✗  NOT YET SIGNED", FAIL))
+        return items
 
-    parties_data = [[
-        _party_col(landlord, landlord_cert, landlord_photo_path,
-                   agreement.landlord_signed_at, 'LANDLORD'),
-        _party_col(tenant, tenant_cert, tenant_photo_path,
-                   agreement.tenant_signed_at, 'TENANT'),
-    ]]
-    pt = Table(parties_data, colWidths=[87 * mm, 87 * mm])
+    pt = Table([[
+        _party_block(landlord, landlord_cert, landlord_photo_path,
+                     agreement.landlord_signed_at, agreement.landlord_cert_serial, 'LANDLORD'),
+        _party_block(tenant,   tenant_cert,   tenant_photo_path,
+                     agreement.tenant_signed_at,   agreement.tenant_cert_serial,   'TENANT'),
+    ]], colWidths=[87 * mm, 87 * mm])
     pt.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('GRID', (0, 0), (-1, -1), 0.3, colors.lightgrey),
-        ('PADDING', (0, 0), (-1, -1), 6),
+        ('ALIGN',   (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN',  (0, 0), (-1, -1), 'TOP'),
+        ('GRID',    (0, 0), (-1, -1), 0.5, MID),
+        ('PADDING', (0, 0), (-1, -1), 8),
     ]))
     story.append(pt)
-    story.append(Spacer(1, 8))
-
-    # ── SIGNATURE STATUS ────────────────────────────────────────────────────
-    story.append(Paragraph("▸ DIGITAL SIGNATURE STATUS", h2))
-    l_ok = '✓ SIGNED' if agreement.landlord_signature else '✗ NOT SIGNED'
-    t_ok = '✓ SIGNED' if agreement.tenant_signature else '✗ NOT SIGNED'
-    sig_data = [
-        ['Party', 'Status', 'Certificate Serial', 'Signed At'],
-        ['Landlord', l_ok,
-         (agreement.landlord_cert_serial or 'N/A')[:16] + '…',
-         str(agreement.landlord_signed_at or 'N/A')],
-        ['Tenant', t_ok,
-         (agreement.tenant_cert_serial or 'N/A')[:16] + '…',
-         str(agreement.tenant_signed_at or 'N/A')],
-    ]
-    _meta_table(story, sig_data, header=True)
-    story.append(Spacer(1, 8))
-
-    # ── CRYPTO INTEGRITY ────────────────────────────────────────────────────
-    story.append(Paragraph("▸ CRYPTOGRAPHIC INTEGRITY", h2))
-    story.append(Paragraph(f"Document SHA-256 Hash:", style(
-        'HashLabel', fontSize=8, fontName='Helvetica-Bold', spaceAfter=2)))
-    story.append(Paragraph(agreement.document_hash_sha256 or 'N/A', mono))
-    final = 'VERIFIED — BOTH PARTIES SIGNED' if agreement.is_fully_signed else 'PENDING SIGNATURES'
-    story.append(Paragraph(f"Final Verification: {final}", style(
-        'FV', fontSize=11, fontName='Helvetica-Bold', spaceAfter=4,
-        textColor=colors.HexColor('#15803d') if agreement.is_fully_signed else colors.HexColor('#92400e'))))
     story.append(Spacer(1, 6))
 
-    # ── QR CODE ─────────────────────────────────────────────────────────────
-    qr_row = [[]]
-    qr_row[0].append(Paragraph("Scan to verify online:", body))
+    # ── REMARKS ───────────────────────────────────────────────────────────────
+    if agreement.landlord_remarks or agreement.tenant_remarks:
+        _section_header(story, "REMARKS AT SIGNING")
+        remarks_data = []
+        if agreement.landlord_remarks:
+            remarks_data.append(['Landlord Remarks', agreement.landlord_remarks])
+        if agreement.tenant_remarks:
+            remarks_data.append(['Tenant Remarks', agreement.tenant_remarks])
+        _kv_table(story, remarks_data, col_widths=[40 * mm, 134 * mm])
+
+    # ── SPECIAL TERMS ─────────────────────────────────────────────────────────
+    if agreement.terms:
+        _section_header(story, "SPECIAL TERMS & CONDITIONS")
+        story.append(Paragraph(agreement.terms, BODY))
+        story.append(Spacer(1, 4))
+
+    # ── DIGITAL SIGNATURES ────────────────────────────────────────────────────
+    _section_header(story, "DIGITAL SIGNATURES (RSA-2048)")
+    story.append(Paragraph(
+        "Each signature below is an RSA-2048 cryptographic proof generated from the signer's "
+        "private key against the SHA-256 hash of this document. Verification can be performed "
+        "using the signer's public key stored on the Valid Rent platform.", BODY))
+    story.append(Spacer(1, 4))
+
+    l_ok = agreement.landlord_signature is not None
+    t_ok = agreement.tenant_signature is not None
+    sig_status_data = [
+        ['Party',     'Status',
+         'Certificate Serial',                  'Signed At'],
+        ['Landlord',  '✓ SIGNED' if l_ok else '✗ NOT SIGNED',
+         agreement.landlord_cert_serial or 'N/A',
+         agreement.landlord_signed_at.strftime('%d %b %Y %H:%M') if agreement.landlord_signed_at else '—'],
+        ['Tenant',    '✓ SIGNED' if t_ok else '✗ NOT SIGNED',
+         agreement.tenant_cert_serial or 'N/A',
+         agreement.tenant_signed_at.strftime('%d %b %Y %H:%M') if agreement.tenant_signed_at else '—'],
+    ]
+    t = Table(sig_status_data, colWidths=[28 * mm, 28 * mm, 78 * mm, 40 * mm])
+    t.setStyle(TableStyle([
+        ('BACKGROUND',  (0, 0), (-1, 0),   DARK),
+        ('TEXTCOLOR',   (0, 0), (-1, 0),   colors.white),
+        ('FONTNAME',    (0, 0), (-1, 0),   'Helvetica-Bold'),
+        ('FONTSIZE',    (0, 0), (-1, -1),  8),
+        ('FONTNAME',    (0, 1), (-1, -1),  'Helvetica'),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [LIGHT, colors.white]),
+        ('GRID',        (0, 0), (-1, -1),  0.3, MID),
+        ('PADDING',     (0, 0), (-1, -1),  5),
+        ('ALIGN',       (0, 0), (-1, -1),  'LEFT'),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 6))
+
+    # Full signature values
+    if agreement.landlord_signature:
+        story.append(Paragraph("Landlord RSA-2048 Signature:", LABEL))
+        story.append(Paragraph(agreement.landlord_signature, MONO))
+    if agreement.tenant_signature:
+        story.append(Paragraph("Tenant RSA-2048 Signature:", LABEL))
+        story.append(Paragraph(agreement.tenant_signature, MONO))
+
+    # ── CRYPTOGRAPHIC INTEGRITY ───────────────────────────────────────────────
+    _section_header(story, "CRYPTOGRAPHIC INTEGRITY")
+    story.append(Paragraph("Document SHA-256 Hash:", LABEL))
+    story.append(Paragraph(agreement.document_hash_sha256 or 'N/A', MONO))
+    final_label = ("✓  FULLY VERIFIED — BOTH PARTIES SIGNED"
+                   if agreement.is_fully_signed
+                   else "⏳  PENDING — SIGNATURES INCOMPLETE")
+    story.append(Paragraph(final_label, OK if agreement.is_fully_signed else FAIL))
+    story.append(Spacer(1, 6))
+
+    # ── QR CODE ───────────────────────────────────────────────────────────────
+    _section_header(story, "ONLINE VERIFICATION")
+    qr_inner = [Paragraph("Scan the QR code to verify this certificate online:", BODY)]
     if qr_image_path and os.path.exists(qr_image_path):
         try:
-            qr_row[0].append(RLImage(qr_image_path, width=32 * mm, height=32 * mm))
+            qr_inner.append(RLImage(qr_image_path, width=34 * mm, height=34 * mm))
         except Exception:
             pass
-    qr_row[0].append(Paragraph(f"Verify URL: /verify/code/{verification_code}", mono))
-    qr_t = Table(qr_row, colWidths=[174 * mm])
+    qr_inner.append(Paragraph(f"Verify URL: /verify/code/{verification_code}", MONO))
+    qr_t = Table([qr_inner], colWidths=[174 * mm])
     qr_t.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('GRID', (0, 0), (-1, -1), 0.3, colors.lightgrey),
-        ('PADDING', (0, 0), (-1, -1), 6),
+        ('ALIGN',   (0, 0), (-1, -1), 'CENTER'),
+        ('PADDING', (0, 0), (-1, -1), 8),
+        ('BOX',     (0, 0), (-1, -1), 0.5, MID),
     ]))
     story.append(qr_t)
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 8))
 
-    # ── BILINGUAL LEGAL TEXT ─────────────────────────────────────────────────
-    if en_legal_text or np_legal_text:
+    # ── FOOTER DISCLAIMER (page 1) ────────────────────────────────────────────
+    story.append(HRFlowable(width='100%', thickness=1, color=MID, spaceAfter=4))
+    story.append(Paragraph(DISCLAIMER, _s('disc', fontSize=7, fontName='Helvetica-Oblique',
+                                          textColor=GREY, alignment=TA_CENTER)))
+
+    # ── PAGE 2: ENGLISH LEGAL TEXT ────────────────────────────────────────────
+    if en_legal_text:
         story.append(PageBreak())
-        story.append(Paragraph("▸ LEGAL AGREEMENT TEXT — ENGLISH", h2))
-        story.append(HRFlowable(width='100%', thickness=1, color=colors.black, spaceAfter=6))
-        for line in (en_legal_text or '').split('\n'):
-            story.append(Paragraph(line or '&nbsp;', body))
+        story.append(Paragraph("VALID RENT — RENTAL AGREEMENT", H1))
+        story.append(Paragraph("Full Legal Text — English", H2))
+        story.append(HRFlowable(width='100%', thickness=2, color=BLACK, spaceAfter=8))
+        for line in en_legal_text.split('\n'):
+            stripped = line.rstrip()
+            if stripped.startswith('━'):
+                story.append(HRFlowable(width='100%', thickness=0.5, color=MID, spaceAfter=2, spaceBefore=4))
+            elif stripped.isupper() and len(stripped) > 4:
+                story.append(Paragraph(stripped, _s('bold_line', fontSize=9,
+                    fontName='Helvetica-Bold', textColor=DARK, spaceAfter=2)))
+            else:
+                story.append(Paragraph(stripped or '&nbsp;', BODY))
 
+    # ── PAGE 3: NEPALI LEGAL TEXT ─────────────────────────────────────────────
+    if np_legal_text:
         story.append(PageBreak())
-        story.append(Paragraph("▸ कानूनी सम्झौता पाठ — नेपाली", h2))
-        story.append(HRFlowable(width='100%', thickness=1, color=colors.black, spaceAfter=6))
-        # Nepali text as-is (ASCII fallback for Devanagari in basic PDF)
-        for line in (np_legal_text or '').split('\n'):
-            story.append(Paragraph(line or '&nbsp;', body))
-
-    # ── FOOTER DISCLAIMER ────────────────────────────────────────────────────
-    story.append(Spacer(1, 10))
-    story.append(HRFlowable(width='100%', thickness=1, color=colors.black, spaceAfter=6))
-    story.append(Paragraph(DISCLAIMER, style(
-        'Disc', fontSize=7, fontName='Helvetica-Oblique',
-        textColor=colors.grey, alignment=TA_CENTER)))
+        story.append(Paragraph("भ्यालिड रेन्ट — भाडा सम्झौता", H1))
+        story.append(Paragraph("पूर्ण कानूनी पाठ — नेपाली", H2))
+        story.append(HRFlowable(width='100%', thickness=2, color=BLACK, spaceAfter=8))
+        for line in np_legal_text.split('\n'):
+            stripped = line.rstrip()
+            if stripped.startswith('━'):
+                story.append(HRFlowable(width='100%', thickness=0.5, color=MID, spaceAfter=2, spaceBefore=4))
+            else:
+                story.append(Paragraph(stripped or '&nbsp;', BODY))
 
     doc.build(story, onFirstPage=_page_footer, onLaterPages=_page_footer)
-
     return hashlib.sha256(open(output_path, 'rb').read()).hexdigest()
-
-
-def _meta_table(story, data, header=False):
-    col_widths = [38 * mm, 52 * mm, 38 * mm, 46 * mm]
-    if len(data[0]) == 2:
-        col_widths = [50 * mm, 124 * mm]
-
-    t = Table(data, colWidths=col_widths)
-    ts = [
-        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 8),
-        ('ROWBACKGROUNDS', (0, 0), (-1, -1), [colors.whitesmoke, colors.white]),
-        ('GRID', (0, 0), (-1, -1), 0.3, colors.lightgrey),
-        ('PADDING', (0, 0), (-1, -1), 4),
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-    ]
-    if header:
-        ts += [
-            ('BACKGROUND', (0, 0), (-1, 0), colors.black),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ]
-    else:
-        # Bold label columns
-        ts += [
-            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-            ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
-        ]
-    t.setStyle(TableStyle(ts))
-    story.append(t)

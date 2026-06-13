@@ -30,12 +30,25 @@ class RentalAsset(db.Model):
     description = db.Column(db.Text)
     location = db.Column(db.String(300))
     estimated_value = db.Column(db.Float)
+    rent_period = db.Column(db.String(20), default='per_month')  # per_month | per_day | per_year | fixed
     status = db.Column(db.String(20), default='available')  # available | rented | inactive
+    photo_path = db.Column(db.String(500))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     owner = db.relationship('User', back_populates='assets')
     category = db.relationship('AssetCategory', back_populates='assets')
     agreements = db.relationship('RentalAgreement', back_populates='asset', lazy='dynamic')
+
+    _PERIOD_LABELS = {
+        'per_month': '/ month',
+        'per_day': '/ day',
+        'per_year': '/ year',
+        'fixed': 'fixed price',
+    }
+
+    @property
+    def rent_period_label(self):
+        return self._PERIOD_LABELS.get(self.rent_period or 'per_month', '/ month')
 
     def __repr__(self):
         return f'<RentalAsset {self.asset_title}>'

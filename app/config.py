@@ -14,6 +14,7 @@ class Config:
     PDFS_DIR = STORAGE_DIR / 'generated_pdfs'
     QR_DIR = STORAGE_DIR / 'qr_codes'
     PHOTOS_DIR = STORAGE_DIR / 'identity_photos'
+    ASSET_PHOTOS_DIR = STORAGE_DIR / 'asset_photos'
 
     WTF_CSRF_ENABLED = True
     SESSION_COOKIE_HTTPONLY = True

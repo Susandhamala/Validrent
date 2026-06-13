@@ -17,6 +17,7 @@ class RentalAgreement(db.Model):
 
     # Encrypted file info
     encrypted_file_path = db.Column(db.String(500))
+    shared_file_path = db.Column(db.String(500))   # readable copy served to both parties
     original_filename = db.Column(db.String(200))
     document_hash_sha256 = db.Column(db.String(64))
     aes_key_encrypted = db.Column(db.Text)  # AES key encrypted with landlord's RSA public key
@@ -34,6 +35,16 @@ class RentalAgreement(db.Model):
     tenant_signature = db.Column(db.Text)
     landlord_signed_at = db.Column(db.DateTime)
     tenant_signed_at = db.Column(db.DateTime)
+    landlord_remarks = db.Column(db.Text)
+    tenant_remarks = db.Column(db.Text)
+
+    # Mutual deletion consent (fully-signed agreements only)
+    landlord_delete_requested = db.Column(db.DateTime)
+    tenant_delete_requested = db.Column(db.DateTime)
+
+    @property
+    def both_requested_delete(self):
+        return bool(self.landlord_delete_requested and self.tenant_delete_requested)
 
     # Verification
     landlord_cert_serial = db.Column(db.String(64))
