@@ -445,6 +445,13 @@ def sign_agreement(req_id):
         flash('Please approve the document content before signing.', 'error')
         return redirect(url_for('req.view_request', req_id=req_id))
 
+    # Identity photo is mandatory before signing
+    my_photo = IdentityPhoto.query.filter_by(
+        user_id=current_user.id, agreement_id=agreement.id).first()
+    if not my_photo:
+        flash('You must capture your identity photo before signing. Please capture your photo first.', 'error')
+        return redirect(url_for('photo.capture_photo', agreement_id=agreement.id))
+
     sig = rsa_sign(current_user.private_key_pem, agreement.document_hash_sha256)
     role = 'landlord' if current_user.id == req_obj.landlord_id else 'tenant'
 

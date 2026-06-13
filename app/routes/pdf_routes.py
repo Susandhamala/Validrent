@@ -38,20 +38,24 @@ def generate_pdf(agreement_id):
 
     landlord, tenant, landlord_cert, tenant_cert = _get_parties_and_certs(agreement)
 
-    # Fetch both photos (not required — PDF shows placeholder if missing)
+    # Both identity photos are mandatory before PDF generation
     landlord_photo = IdentityPhoto.query.filter_by(
         user_id=agreement.landlord_id, agreement_id=agreement_id).first()
     tenant_photo = IdentityPhoto.query.filter_by(
         user_id=agreement.tenant_id, agreement_id=agreement_id).first() if agreement.tenant_id else None
 
-    # Warn if photos missing but still allow generation
     missing = []
     if not landlord_photo:
-        missing.append('landlord')
+        missing.append('Landlord')
     if agreement.tenant_id and not tenant_photo:
-        missing.append('tenant')
+        missing.append('Tenant')
     if missing:
-        flash(f'Note: {", ".join(missing)} photo(s) not captured — PDF will show placeholder.', 'warning')
+        flash(
+            f'Cannot generate PDF — identity photo(s) missing for: {", ".join(missing)}. '
+            f'Both parties must capture their identity photo before the certificate can be issued.',
+            'error'
+        )
+        return redirect(url_for('agreement.view_agreement', agreement_id=agreement_id))
 
     vcode = agreement.verification_code or generate_verification_code()
     agreement.verification_code = vcode

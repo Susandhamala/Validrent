@@ -331,13 +331,21 @@
       {% endif %}
     </p>
     {% if current_user.id == req.landlord_id or (current_user.id == req.tenant_id and agreement.landlord_signature) %}
-    <form id="signForm" method="POST" action="{{ url_for('req.sign_agreement', req_id=req.id) }}">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    </form>
-    <button type="button" class="btn btn-primary"
-            onclick="confirmAction('Sign this agreement with your RSA-2048 digital certificate? This action is cryptographically binding.','signForm')">
-      🔐 Sign with Digital Certificate
-    </button>
+      {% if not my_photo %}
+      <div style="padding:12px 14px;background:#fef3c7;border-left:4px solid #f59e0b;border-radius:6px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:4px">📷 Identity Photo Required</div>
+        <div style="font-size:13px;color:#92400e;margin-bottom:10px">You must capture your identity photo before signing. This is mandatory.</div>
+        <a href="{{ url_for('photo.capture_photo', agreement_id=req.agreement_id) }}" class="btn btn-primary btn-sm">Capture My Photo →</a>
+      </div>
+      {% else %}
+      <form id="signForm" method="POST" action="{{ url_for('req.sign_agreement', req_id=req.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      </form>
+      <button type="button" class="btn btn-primary"
+              onclick="confirmAction('Sign this agreement with your RSA-2048 digital certificate? This action is cryptographically binding.','signForm')">
+        🔐 Sign with Digital Certificate
+      </button>
+      {% endif %}
     {% endif %}
     {% endif %}
   </div>

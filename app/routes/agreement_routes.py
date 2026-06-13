@@ -205,14 +205,46 @@ def view_agreement(agreement_id):
         user_id=agreement.tenant_id, is_revoked=False).first() if agreement.tenant_id else None
 
     from app.models.request import AgreementRequest
+    from app.models.photo import IdentityPhoto
+    from app.models.chat import ChatThread, ChatMessage
+
+    # linked_req: prefer landlord-initiated (direct), fall back to tenant-initiated
     linked_req = AgreementRequest.query.filter_by(
         agreement_id=agreement_id, initiated_by_landlord=True).first()
+    if not linked_req:
+        linked_req = AgreementRequest.query.filter_by(agreement_id=agreement_id).first()
+
+    # Get or create the chat thread via the linked request
+    thread = None
+    chat_messages = []
+    if linked_req:
+        thread = linked_req.chat_thread
+        if not thread:
+            from app.services.chat_service import generate_thread_key
+            thread = ChatThread(request_id=linked_req.id,
+                                encrypted_thread_key=generate_thread_key())
+            db.session.add(thread)
+            db.session.commit()
+        from app.services.chat_service import decrypt_thread_messages
+        chat_messages = decrypt_thread_messages(thread)
+
+    my_photo = IdentityPhoto.query.filter_by(
+        user_id=current_user.id, agreement_id=agreement_id).first()
+    landlord_photo = IdentityPhoto.query.filter_by(
+        user_id=agreement.landlord_id, agreement_id=agreement_id).first()
+    tenant_photo = IdentityPhoto.query.filter_by(
+        user_id=agreement.tenant_id, agreement_id=agreement_id).first() if agreement.tenant_id else None
 
     return render_template('agreements/view.html',
                            agreement=agreement,
                            landlord_cert=landlord_cert,
                            tenant_cert=tenant_cert,
-                           linked_req=linked_req)
+                           linked_req=linked_req,
+                           my_photo=my_photo,
+                           landlord_photo=landlord_photo,
+                           tenant_photo=tenant_photo,
+                           thread=thread,
+                           chat_messages=chat_messages)
 
 
 @agreement_bp.route('/<int:agreement_id>/sign', methods=['POST'])
@@ -232,6 +264,14 @@ def sign_agreement(agreement_id):
     if not cert or not cert.is_valid:
         flash('Your certificate is not valid. Cannot sign.', 'error')
         return redirect(url_for('agreement.view_agreement', agreement_id=agreement_id))
+
+    # Identity photo is mandatory before signing
+    from app.models.photo import IdentityPhoto
+    my_photo = IdentityPhoto.query.filter_by(
+        user_id=current_user.id, agreement_id=agreement_id).first()
+    if not my_photo:
+        flash('You must capture your identity photo before signing.', 'error')
+        return redirect(url_for('photo.capture_photo', agreement_id=agreement_id))
 
     from datetime import datetime
     signature = rsa_sign(current_user.private_key_pem, agreement.document_hash_sha256)
