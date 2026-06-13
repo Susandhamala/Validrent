@@ -142,6 +142,17 @@ def create_request(asset_id):
             f"📋 Rental request created by {current_user.full_name} "
             f"for '{asset.asset_title}'. Proposed rent: {req_obj.currency} {proposed_rent or 'TBD'}."
         )
+        # Post the tenant's message as a real chat message so the landlord sees it
+        if tenant_message:
+            ct, nonce, h = encrypt_message(thread.encrypted_thread_key, tenant_message)
+            db.session.add(ChatMessage(
+                thread_id=thread.id,
+                sender_id=current_user.id,
+                ciphertext_b64=ct,
+                nonce_b64=nonce,
+                message_hash=h,
+                is_system=False,
+            ))
         db.session.commit()
 
         flash('Rental request sent! The landlord will review it shortly.', 'success')

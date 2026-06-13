@@ -63,6 +63,12 @@ def decrypt_message(thread_key_b64: str, ciphertext_b64: str, nonce_b64: str) ->
 
 def decrypt_thread_messages(thread) -> list[dict]:
     """Decrypt all messages in a ChatThread. Returns list of dicts."""
+    from flask_login import current_user
+    try:
+        viewer_id = current_user.id if current_user.is_authenticated else None
+    except Exception:
+        viewer_id = None
+
     results = []
     for msg in thread.messages:
         try:
@@ -84,6 +90,7 @@ def decrypt_thread_messages(thread) -> list[dict]:
             'text': text,
             'sent_at': msg.sent_at,
             'is_system': msg.is_system,
+            'is_mine': msg.sender_id == viewer_id and not msg.is_system,
             'hash': msg.message_hash,
         })
     return results
