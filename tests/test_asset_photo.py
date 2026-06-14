@@ -55,7 +55,10 @@ class TestAssetPhoto:
         assert r.status_code == 200
         from app.models.asset import RentalAsset
         with app.app_context():
-            a = RentalAsset.query.filter_by(asset_title='Photo Test House').first()
+            # order by id desc to get the latest asset (earlier tests may have
+            # created one with the same title but no photo)
+            a = RentalAsset.query.filter_by(asset_title='Photo Test House') \
+                                 .order_by(RentalAsset.id.desc()).first()
             assert a is not None
             assert a.photo_path
 
