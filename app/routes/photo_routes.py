@@ -71,10 +71,30 @@ def save_photo(agreement_id):
     if len(photo_bytes) > MAX_PHOTO_SIZE:
         return jsonify({'success': False, 'message': 'Photo too large (max 5 MB).'}), 400
 
-    try:
-        photos_dir = Path(current_app.config['PHOTOS_DIR'])
-        photos_dir.mkdir(parents=True, exist_ok=True)
+    is_tenant = current_user.id == agreement.tenant_id
+    doc_file = request.files.get('document_file')
+    doc_type = request.form.get('document_type', '').strip()
 
+    # ── Tenant document validation ────────────────────────────────────────────
+    if is_tenant:
+        existing_record = IdentityPhoto.query.filter_by(
+            user_id=current_user.id, agreement_id=agreement_id).first()
+        has_existing_doc = existing_record and existing_record.document_path
+        has_new_doc = doc_file and doc_file.filename
+        if not has_existing_doc and not has_new_doc:
+            return jsonify({'success': False,
+                            'message': 'Please upload your government-issued identity document.'}), 400
+        if not doc_type:
+            return jsonify({'success': False,
+                            'message': 'Please select your document type.'}), 400
+    else:
+        existing_record = IdentityPhoto.query.filter_by(
+            user_id=current_user.id, agreement_id=agreement_id).first()
+
+    # ── Save webcam photo ─────────────────────────────────────────────────────
+    try:
+        photos_dir = current_app.config['PHOTOS_DIR']
+        Path(str(photos_dir)).mkdir(parents=True, exist_ok=True)
         photo_filename = f"photo_{current_user.id}_{agreement_id}.jpg"
         photo_path = str(photos_dir / photo_filename)
         with open(photo_path, 'wb') as f:
@@ -84,12 +104,8 @@ def save_photo(agreement_id):
         current_app.logger.error(f"save_photo: failed to save photo: {e}")
         return jsonify({'success': False, 'message': f'Failed to save photo: {e}'}), 500
 
-    # ── Document upload (tenant only) ─────────────────────────────────────────
-    doc_file = request.files.get('document_file')
+    # ── Save identity document (tenant only, if a new file was provided) ──────
     doc_path_saved = None
-    doc_type = request.form.get('document_type', '').strip()
-
-    is_tenant = current_user.id == agreement.tenant_id
     if is_tenant and doc_file and doc_file.filename:
         ext = doc_file.filename.rsplit('.', 1)[-1].lower()
         if ext not in ALLOWED_DOC_EXTS:
@@ -110,23 +126,23 @@ def save_photo(agreement_id):
             current_app.logger.error(f"save_photo: failed to save document: {e}")
             return jsonify({'success': False, 'message': f'Failed to save document: {e}'}), 500
 
-    # ── Persist ──────────────────────────────────────────────────────────────
+    # ── Persist to database ───────────────────────────────────────────────────
     try:
-        existing = IdentityPhoto.query.filter_by(
-            user_id=current_user.id, agreement_id=agreement_id).first()
-
-        if existing:
-            existing.photo_encrypted_path = photo_path
-            existing.photo_hash_sha256 = photo_hash
-            existing.consent_given = True
+        if existing_record:
+            existing_record.photo_encrypted_path = photo_path
+            existing_record.photo_hash_sha256 = photo_hash
+            existing_record.consent_given = True
             if doc_path_saved:
-                existing.document_path = doc_path_saved
-                existing.document_type = doc_type
-                existing.document_approved = False
-                existing.document_approved_at = None
-                existing.document_approved_by = None
+                existing_record.document_path = doc_path_saved
+                existing_record.document_type = doc_type
+                existing_record.document_approved = False
+                existing_record.document_approved_at = None
+                existing_record.document_approved_by = None
+            elif is_tenant and doc_type and existing_record.document_path:
+                # Type changed but no new file — update the type only
+                existing_record.document_type = doc_type
         else:
-            record = IdentityPhoto(
+            db.session.add(IdentityPhoto(
                 user_id=current_user.id,
                 agreement_id=agreement_id,
                 photo_encrypted_path=photo_path,
@@ -135,22 +151,23 @@ def save_photo(agreement_id):
                 purpose='agreement_evidence',
                 document_path=doc_path_saved,
                 document_type=doc_type if doc_path_saved else None,
-            )
-            db.session.add(record)
-
+            ))
         db.session.commit()
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"save_photo: DB error: {e}")
         return jsonify({'success': False, 'message': f'Database error: {e}'}), 500
 
-    # ── Post a chat notification so landlord can see & approve ───────────────
+    # ── Notify landlord via chat when tenant uploads/updates document ─────────
     if is_tenant and doc_path_saved:
         _post_doc_chat_notification(agreement, doc_type)
 
-    msg = 'Photo saved successfully.'
     if is_tenant and doc_path_saved:
         msg = 'Photo and document saved. The landlord will be notified to review your document.'
+    elif is_tenant:
+        msg = 'Photo updated. Your existing document is still on file.'
+    else:
+        msg = 'Photo saved successfully.'
     return jsonify({'success': True, 'message': msg})
 
 

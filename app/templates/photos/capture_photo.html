@@ -70,10 +70,21 @@
       <!-- STEP 2: IDENTITY DOCUMENT (tenant only) -->
       {% if is_tenant %}
       <div style="margin-bottom:24px">
-        <div class="section-title" style="margin-bottom:4px">Step 2 — Upload Identity Document</div>
+        <div class="section-title" style="margin-bottom:4px">
+          Step 2 — Identity Document
+          {% if existing_photo and existing_photo.document_path %}
+          <span style="font-size:11px;font-weight:400;color:var(--success);margin-left:8px">✓ Already on file</span>
+          {% else %}
+          <span style="font-size:11px;font-weight:400;color:var(--danger);margin-left:8px">* Required</span>
+          {% endif %}
+        </div>
         <p class="text-muted text-sm" style="margin-bottom:14px">
-          Upload a clear photo or scan of your valid government-issued identity document.
-          The landlord will review and approve it. This document will appear in the agreement PDF.
+          {% if existing_photo and existing_photo.document_path %}
+          Your document is already on file. You may upload a new one to replace it, or leave it as-is.
+          {% else %}
+          Upload a clear photo or scan of your government-issued identity document (required).
+          The landlord will review and approve it — it will also appear in the agreement PDF.
+          {% endif %}
         </p>
 
         <div class="form-group" style="margin-bottom:12px">
@@ -149,6 +160,7 @@
 <script>
 const AGREEMENT_ID = {{ agreement.id }};
 const IS_TENANT = {{ 'true' if is_tenant else 'false' }};
+const HAS_EXISTING_DOC = {{ 'true' if (is_tenant and existing_photo and existing_photo.document_path) else 'false' }};
 const CSRF = document.querySelector('meta[name="csrf-token"]').content;
 let capturedPhotoData = null;
 let stream = null;
@@ -220,10 +232,11 @@ function checkSubmitReady() {
   const hasPhoto = !!capturedPhotoData;
   let docOk = true;
   if (IS_TENANT) {
-    const docInput = document.getElementById('docFileInput');
     const docType = document.getElementById('docTypeSelect').value;
-    // Document is required for tenant
-    docOk = docInput.files.length > 0 && !!docType;
+    const hasNewFile = document.getElementById('docFileInput').files.length > 0;
+    // A document type is always required.
+    // A file is only required if no document is already on file.
+    docOk = !!docType && (HAS_EXISTING_DOC || hasNewFile);
   }
   document.getElementById('submitBtn').disabled = !(consent && hasPhoto && docOk);
 }
