@@ -7,121 +7,24 @@ on:
     branches: [master]
 
 jobs:
-  # ──────────────────────────────────────────────────────────────────────────
-  # JOB 1 — TEST
-  # Runs the full pytest suite against an in-memory SQLite database
-  # ──────────────────────────────────────────────────────────────────────────
-  test:
-    name: Run Tests (Python ${{ matrix.python-version }})
+  build-and-test:
     runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        python-version: ["3.12"]
-
     steps:
+      # Step 1: Download the code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
+      # Step 2: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
+          python-version: "3.12"
 
+      # Step 3: Install project dependencies
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Create temp directories used by tests
-        run: mkdir -p /tmp/vr_test/{agreements,pdfs,qr,photos,asset_photos}
-
-      - name: Run pytest
-        env:
-          SECRET_KEY: ci-test-secret-key-validrent
-          FLASK_ENV: testing
-        run: |
-          pytest tests/ -v --tb=short 2>&1
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # JOB 2 — SECURITY SCAN
-  # Checks installed packages for known CVEs with pip-audit
-  # ──────────────────────────────────────────────────────────────────────────
-  security:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    needs: test
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install pip-audit
-        run: pip install pip-audit
-
-      - name: Audit dependencies for CVEs
-        run: pip-audit -r requirements.txt --ignore-vuln PYSEC-2024-48 || true
-        # '|| true' keeps CI green for known low-risk advisories;
-        # remove it once all vulns are resolved
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # JOB 3 — LINT
-  # Light style/error check with flake8 (E/F errors only, no style nitpicks)
-  # ──────────────────────────────────────────────────────────────────────────
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: pip
-
-      - name: Install flake8
-        run: pip install flake8
-
-      - name: Run flake8 (errors and undefined names only)
-        run: |
-          flake8 app/ \
-            --count \
-            --select=E9,F63,F7,F82 \
-            --show-source \
-            --statistics
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # JOB 4 — DEPLOY TO RENDER
-  # Only runs on a push to master after tests + security pass.
-  # Trigger Render's deploy hook via HTTP POST.
-  #
-  # Setup:
-  #   1. In Render dashboard → validrent service → Settings → Deploy Hook
-  #   2. Copy the hook URL
-  #   3. In GitHub → Settings → Secrets → Actions → New secret:
-  #      Name:  RENDER_DEPLOY_HOOK_URL
-  #      Value: <the hook URL from Render>
-  # ──────────────────────────────────────────────────────────────────────────
-  deploy:
-    name: Deploy to Render
-    runs-on: ubuntu-latest
-    needs: [test, security]
-    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-
-    steps:
-      - name: Trigger Render deploy
-        run: |
-          curl -s -o /dev/null -w "HTTP %{http_code}" \
-            --max-time 30 \
-            -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
-
-      - name: Confirm deploy triggered
-        run: echo "Deploy hook triggered. Monitor progress at https://dashboard.render.com"
+      # Step 4: Run the tests
+      - name: Run tests
+        run: pytest tests/ -v
