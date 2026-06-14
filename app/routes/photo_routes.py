@@ -72,8 +72,8 @@ def save_photo(agreement_id):
         return jsonify({'success': False, 'message': 'Photo too large (max 5 MB).'}), 400
 
     try:
-        photos_dir = current_app.config['PHOTOS_DIR']
-        Path(str(photos_dir)).mkdir(parents=True, exist_ok=True)
+        photos_dir = Path(current_app.config['PHOTOS_DIR'])
+        photos_dir.mkdir(parents=True, exist_ok=True)
 
         photo_filename = f"photo_{current_user.id}_{agreement_id}.jpg"
         photo_path = str(photos_dir / photo_filename)
