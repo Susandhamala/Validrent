@@ -234,18 +234,23 @@ if (IS_TENANT) {
   document.getElementById('docFileInput').addEventListener('change', checkSubmitReady);
 }
 
+function showStatus(html) {
+  const s = document.getElementById('photoStatus');
+  s.innerHTML = html;
+  s.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 async function submitAll() {
   if (!capturedPhotoData) { alert('Please capture your photo first.'); return; }
-
   const consent = document.getElementById('consentCheck').checked;
   if (!consent) { alert('Please give your consent.'); return; }
 
   const btn = document.getElementById('submitBtn');
   btn.disabled = true;
   btn.textContent = '⏳ Uploading…';
+  document.getElementById('photoStatus').innerHTML = '';
 
   const formData = new FormData();
-  formData.append('csrf_token', CSRF);
   formData.append('photo_data', capturedPhotoData);
   formData.append('consent', 'true');
 
@@ -253,26 +258,32 @@ async function submitAll() {
     const docInput = document.getElementById('docFileInput');
     const docType = document.getElementById('docTypeSelect').value;
     if (docInput.files[0]) formData.append('document_file', docInput.files[0]);
-    formData.append('document_type', docType);
+    if (docType) formData.append('document_type', docType);
   }
 
   try {
-    const r = await fetch(`/photos/save/${AGREEMENT_ID}`, { method: 'POST', body: formData });
-    const d = await r.json();
-    const status = document.getElementById('photoStatus');
+    const r = await fetch(`/photos/save/${AGREEMENT_ID}`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF },
+      body: formData,
+    });
+
+    let d;
+    try { d = await r.json(); }
+    catch { d = { success: false, message: 'Server error (HTTP ' + r.status + '). Please refresh and try again.' }; }
+
     if (d.success) {
-      status.innerHTML = '<div class="success-box" style="margin-top:12px">✓ ' + d.message + ' Redirecting…</div>';
+      showStatus('<div style="padding:12px;background:#f0fdf4;border:1.5px solid #86efac;border-radius:8px;color:#15803d;font-weight:600">✓ ' + d.message + ' Redirecting…</div>');
       setTimeout(() => window.location.href = '/agreements/' + AGREEMENT_ID, 1500);
     } else {
-      status.innerHTML = '<div class="alert alert-danger" style="margin-top:12px">✗ ' + d.message + '</div>';
+      showStatus('<div style="padding:12px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;color:#991b1b">✗ ' + d.message + '</div>');
       btn.disabled = false;
-      btn.textContent = '✓ Submit Photo' + (IS_TENANT ? ' & Document' : '');
+      btn.textContent = '✓ Submit ' + (IS_TENANT ? 'Photo & Document' : 'Photo');
     }
   } catch(e) {
-    document.getElementById('photoStatus').innerHTML =
-      '<div class="alert alert-danger" style="margin-top:12px">Network error. Please try again.</div>';
+    showStatus('<div style="padding:12px;background:#fef2f2;border:1.5px solid #fca5a5;border-radius:8px;color:#991b1b">✗ Network error: ' + e.message + '. Please try again.</div>');
     btn.disabled = false;
-    btn.textContent = '✓ Submit';
+    btn.textContent = '✓ Submit ' + (IS_TENANT ? 'Photo & Document' : 'Photo');
   }
 }
 </script>

@@ -71,16 +71,20 @@ def save_photo(agreement_id):
     if len(photo_bytes) > MAX_PHOTO_SIZE:
         return jsonify({'success': False, 'message': 'Photo too large (max 5 MB).'}), 400
 
-    photos_dir = current_app.config['PHOTOS_DIR']
-    Path(photos_dir).mkdir(parents=True, exist_ok=True)
+    try:
+        photos_dir = current_app.config['PHOTOS_DIR']
+        Path(str(photos_dir)).mkdir(parents=True, exist_ok=True)
 
-    photo_filename = f"photo_{current_user.id}_{agreement_id}.jpg"
-    photo_path = os.path.join(photos_dir, photo_filename)
-    with open(photo_path, 'wb') as f:
-        f.write(photo_bytes)
-    photo_hash = hashlib.sha256(photo_bytes).hexdigest()
+        photo_filename = f"photo_{current_user.id}_{agreement_id}.jpg"
+        photo_path = str(photos_dir / photo_filename)
+        with open(photo_path, 'wb') as f:
+            f.write(photo_bytes)
+        photo_hash = hashlib.sha256(photo_bytes).hexdigest()
+    except Exception as e:
+        current_app.logger.error(f"save_photo: failed to save photo: {e}")
+        return jsonify({'success': False, 'message': f'Failed to save photo: {e}'}), 500
 
-    # ── Document upload (tenant only, optional but strongly encouraged) ───────
+    # ── Document upload (tenant only) ─────────────────────────────────────────
     doc_file = request.files.get('document_file')
     doc_path_saved = None
     doc_type = request.form.get('document_type', '').strip()
@@ -95,48 +99,59 @@ def save_photo(agreement_id):
         if len(doc_bytes) > MAX_DOC_SIZE:
             return jsonify({'success': False,
                             'message': 'Document too large (max 8 MB).'}), 400
-
-        docs_dir = os.path.join(photos_dir, 'documents')
-        Path(docs_dir).mkdir(parents=True, exist_ok=True)
-        doc_filename = f"doc_{current_user.id}_{agreement_id}.{ext}"
-        doc_path_saved = os.path.join(docs_dir, doc_filename)
-        with open(doc_path_saved, 'wb') as f:
-            f.write(doc_bytes)
+        try:
+            docs_dir = photos_dir / 'documents'
+            docs_dir.mkdir(parents=True, exist_ok=True)
+            doc_filename = f"doc_{current_user.id}_{agreement_id}.{ext}"
+            doc_path_saved = str(docs_dir / doc_filename)
+            with open(doc_path_saved, 'wb') as f:
+                f.write(doc_bytes)
+        except Exception as e:
+            current_app.logger.error(f"save_photo: failed to save document: {e}")
+            return jsonify({'success': False, 'message': f'Failed to save document: {e}'}), 500
 
     # ── Persist ──────────────────────────────────────────────────────────────
-    existing = IdentityPhoto.query.filter_by(
-        user_id=current_user.id, agreement_id=agreement_id).first()
+    try:
+        existing = IdentityPhoto.query.filter_by(
+            user_id=current_user.id, agreement_id=agreement_id).first()
 
-    if existing:
-        existing.photo_encrypted_path = photo_path
-        existing.photo_hash_sha256 = photo_hash
-        existing.consent_given = True
-        if doc_path_saved:
-            existing.document_path = doc_path_saved
-            existing.document_type = doc_type
-            existing.document_approved = False   # reset approval when re-uploaded
-            existing.document_approved_at = None
-            existing.document_approved_by = None
-    else:
-        record = IdentityPhoto(
-            user_id=current_user.id,
-            agreement_id=agreement_id,
-            photo_encrypted_path=photo_path,
-            photo_hash_sha256=photo_hash,
-            consent_given=True,
-            purpose='agreement_evidence',
-            document_path=doc_path_saved,
-            document_type=doc_type if doc_path_saved else None,
-        )
-        db.session.add(record)
+        if existing:
+            existing.photo_encrypted_path = photo_path
+            existing.photo_hash_sha256 = photo_hash
+            existing.consent_given = True
+            if doc_path_saved:
+                existing.document_path = doc_path_saved
+                existing.document_type = doc_type
+                existing.document_approved = False
+                existing.document_approved_at = None
+                existing.document_approved_by = None
+        else:
+            record = IdentityPhoto(
+                user_id=current_user.id,
+                agreement_id=agreement_id,
+                photo_encrypted_path=photo_path,
+                photo_hash_sha256=photo_hash,
+                consent_given=True,
+                purpose='agreement_evidence',
+                document_path=doc_path_saved,
+                document_type=doc_type if doc_path_saved else None,
+            )
+            db.session.add(record)
 
-    db.session.commit()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"save_photo: DB error: {e}")
+        return jsonify({'success': False, 'message': f'Database error: {e}'}), 500
 
     # ── Post a chat notification so landlord can see & approve ───────────────
     if is_tenant and doc_path_saved:
         _post_doc_chat_notification(agreement, doc_type)
 
-    return jsonify({'success': True, 'message': 'Photo and document saved successfully.'})
+    msg = 'Photo saved successfully.'
+    if is_tenant and doc_path_saved:
+        msg = 'Photo and document saved. The landlord will be notified to review your document.'
+    return jsonify({'success': True, 'message': msg})
 
 
 def _post_doc_chat_notification(agreement, doc_type):
