@@ -5,7 +5,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY', 'validrent-dev-secret-2024')
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', f'sqlite:///{BASE_DIR}/instance/validrent.db')
+    _db_url = os.environ.get('DATABASE_URL', f'sqlite:///{BASE_DIR}/instance/validrent.db')
+    if _db_url.startswith('postgres://'):
+        _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+    SQLALCHEMY_DATABASE_URI = _db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max upload
 
